@@ -55,14 +55,19 @@ int main() {
 	LOG_DEBUG("Vulkan Instance Extensions: " + std::to_string(instanceExtensionCount));
 	LOG_DEBUG(utils::join(enabledInstanceExtensions, instanceExtensionCount));
 
-	LOG_INFO("Initializing Vulkan instance");
-	auto context = initVulkan(instanceExtensionCount, enabledInstanceExtensions, 0, nullptr);
-	LOG_DEBUG("Vulkan instance initialized");
+	const char* enableDeviceExtensions[] { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	auto context = initVulkan(instanceExtensionCount, enabledInstanceExtensions, ARRAY_COUNT(enableDeviceExtensions), enableDeviceExtensions);
+
+	VkSurfaceKHR surface;
+	SDL_Vulkan_CreateSurface(window, context->instance, nullptr, &surface);
+	VulkanSwapchain swapchain = createSwapchain(context.get(), surface, vk::ImageUsageFlagBits::eColorAttachment);
 
 	while (handleMessage()) {
 
 	}
 
+	VKA(context->device.waitIdle());
+	destroySwapchain(context.get(), &swapchain);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
 	return 0;
