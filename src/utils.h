@@ -35,6 +35,11 @@ namespace utils {
         return join(std::span<const T>(elements), separator);
     }
 
+    template<class T>
+    std::string fmt_ptr(T* p) {
+        std::ostringstream o; o << (const void*)p; return o.str();
+    }
+
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof(array[0]))
 
 } // namespace utils

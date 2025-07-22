@@ -1,9 +1,10 @@
 #include "vulkan_base.h"
 
-#include "../logger.h"
-#include "../utils.hpp"
+#include "logger.h"
+#include "utils.h"
+#include "types.h"
 
-bool initVulkanInstance(VulkanContext* context, uint32_t instanceExtensionsCount, const char** instanceExtensions) {
+bool initVulkanInstance(VulkanContext* context, u32 instanceExtensionsCount, const char* const* instanceExtensions) {
 	// Vk Layers
 	const auto layerProperties = VKA(vk::enumerateInstanceLayerProperties());
 	LOG_DEBUG("Active Vulkan Layers: " + std::to_string(layerProperties.size()));
@@ -15,13 +16,14 @@ bool initVulkanInstance(VulkanContext* context, uint32_t instanceExtensionsCount
 	const char* enabledLayers[] = {
 		"VK_LAYER_KHRONOS_validation"
 	};
+
 	LOG_INFO("Enabled Layers: " + utils::join(enabledLayers));
 
 	// Vk Extensions
 	const auto instanceExtensionProperties = VKA(vk::enumerateInstanceExtensionProperties());
-	LOG_INFO("Vulkan Extensions: " + std::to_string(instanceExtensionProperties.size()));
+	LOG_DEBUG("Vulkan Extensions: " + std::to_string(instanceExtensionProperties.size()));
 	for (auto const& ext : instanceExtensionProperties) {
-		LOG_INFO("Extension: " + std::string(ext.extensionName));
+		LOG_DEBUG("Extension: " + std::string(ext.extensionName));
 	}
 
 	vk::ApplicationInfo applicationInfo{};
@@ -29,24 +31,21 @@ bool initVulkanInstance(VulkanContext* context, uint32_t instanceExtensionsCount
 	applicationInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	applicationInfo.pEngineName        = "No Engine";
 	applicationInfo.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
-	applicationInfo.apiVersion        = VK_API_VERSION_1_4;       // Tutorial was 1.2
-
+	applicationInfo.apiVersion         = VK_API_VERSION_1_4;       // Tutorial was 1.2
 
 	vk::InstanceCreateInfo createInfo{};
 	createInfo.pApplicationInfo        = &applicationInfo;
-	createInfo.enabledLayerCount       = static_cast<uint32_t>(std::size(enabledLayers));
+	createInfo.enabledLayerCount       = static_cast<u32>(std::size(enabledLayers));
 	createInfo.ppEnabledLayerNames     = enabledLayers;
 	createInfo.enabledExtensionCount   = instanceExtensionsCount;
 	createInfo.ppEnabledExtensionNames = instanceExtensions;
-
 
 	context->instance = VKA(vk::createInstance(createInfo));
 
 	return true;
 }
 
-bool selectPhysicalDevice(VulkanContext* context)
-{
+bool selectPhysicalDevice(VulkanContext* context) {
 	vk::Instance instance{ context->instance };
 	const auto devices = VKA(instance.enumeratePhysicalDevices());
 	if (devices.empty()) {
@@ -58,8 +57,7 @@ bool selectPhysicalDevice(VulkanContext* context)
 	LOG_INFO("Found " + std::to_string(devices.size()) + " GPUs:");
 
 	std::size_t gpuIndex = 0;
-	for (auto const& device : devices)
-	{
+	for (auto const& device : devices) {
 		auto props = VK(vk::PhysicalDevice{ device }.getProperties());
 		LOG_INFO("GPU " + std::to_string(gpuIndex) + ": " + std::string(props.deviceName));
 		gpuIndex ++;
@@ -73,15 +71,67 @@ bool selectPhysicalDevice(VulkanContext* context)
 	return true;
 }
 
-std::unique_ptr<VulkanContext> initVulkan(uint32_t instanceExtensionsCount, const char** instanceExtensions) {
+bool createLogicalDevice(VulkanContext* context, u32 deviceExtensionsCount, const char* const* deviceExtensions) {
+	auto queueFamilies = context->physicalDevice.getQueueFamilyProperties();
+
+	u32 graphicsQueueIndex = UINT32_MAX;
+	for (u32 i = 0; i < queueFamilies.size(); ++i) {
+		auto queueFamily = queueFamilies[i];
+		if (queueFamily.queueCount > 0) {
+			if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics) {
+				graphicsQueueIndex = i;
+				 break;
+			}
+		}
+	}
+
+	if (graphicsQueueIndex == UINT32_MAX) {
+		LOG_ERROR("Failed to find graphics queue index");
+		return false;
+	}
+
+	constexpr float queuePriorities[] = { 1.0f };
+
+	vk::DeviceQueueCreateInfo queueCreateInfo{};
+	queueCreateInfo.queueFamilyIndex = graphicsQueueIndex;
+	queueCreateInfo.queueCount = 1;
+	queueCreateInfo.pQueuePriorities = queuePriorities;
+
+	vk::PhysicalDeviceFeatures enabledFeatures{};
+
+	vk::DeviceCreateInfo createInfo{};
+	createInfo.queueCreateInfoCount = 1;
+	createInfo.pQueueCreateInfos = &queueCreateInfo;
+	createInfo.enabledExtensionCount = deviceExtensionsCount;
+	createInfo.ppEnabledExtensionNames = deviceExtensions;
+	createInfo.pEnabledFeatures = &enabledFeatures;
+
+	try {
+		context->device = context->physicalDevice.createDevice(createInfo);
+	}
+	catch (vk::SystemError const& e) {
+		LOG_ERROR("Failed to create logical device: " + std::string(e.what()));
+		return false;
+	}
+
+	context->graphicsQueue.familyIndex = graphicsQueueIndex;
+	context->graphicsQueue.queue = context->device.getQueue(graphicsQueueIndex, 0);
+
+	return true;
+}
+
+std::unique_ptr<VulkanContext> initVulkan(u32 instanceExtensionsCount, const char* const* instanceExtensions, u32 deviceExtensionsCount, const char* const* deviceExtensions) {
 	auto context = std::make_unique<VulkanContext>();
 
 	if (!initVulkanInstance(context.get(), instanceExtensionsCount, instanceExtensions)) {
 		return nullptr;
 	}
 
-	if (!selectPhysicalDevice(context.get()))
-	{
+	if (!selectPhysicalDevice(context.get())) {
+		return nullptr;
+	}
+
+	if (!createLogicalDevice(context.get(), deviceExtensionsCount, deviceExtensions)) {
 		return nullptr;
 	}
 

@@ -19,7 +19,7 @@ static std::string shortenPath(const std::string& filePath) {
 
 Logger::Logger(const std::string& filename) : logfile(filename, std::ios::app) {
     if (!logfile) {
-        std::cerr << "Error on opening log-file: " << filename << std::endl;
+        std::cerr << "Error on opening logfile: " << filename << std::endl;
     }
 }
 

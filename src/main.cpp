@@ -4,11 +4,12 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
 #include "logger.h"
-#include "utils.hpp"
+#include "utils.h"
 #include "vulkan_base/vulkan_base.h"
 
 Logger globalLogger("VulkanLearning.log");
@@ -36,7 +37,7 @@ int main() {
 	LOG_INFO("--- Program started ---");
 	LOG_INFO("Start time: " + getCurrentTimeFormatted());
 
-	if (!SDL_Init(SDL_INIT_VIDEO)) {
+	if (SDL_Init(SDL_INIT_VIDEO) != true) { // SDL returns true on success
 		LOG_ERROR("Error initializing SDL: " + std::string(SDL_GetError()));
 		return 1;
 	}
@@ -49,12 +50,14 @@ int main() {
 
 	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
-	uint32_t instanceExtensionCount;
+	u32 instanceExtensionCount = 0;
 	const char *const *enabledInstanceExtensions = SDL_Vulkan_GetInstanceExtensions(&instanceExtensionCount);
 	LOG_DEBUG("Vulkan Instance Extensions: " + std::to_string(instanceExtensionCount));
-	LOG_DEBUG(utils::join(const_cast<const char**>(enabledInstanceExtensions), instanceExtensionCount));
+	LOG_DEBUG(utils::join(enabledInstanceExtensions, instanceExtensionCount));
 
-	auto context = initVulkan(instanceExtensionCount, const_cast<const char**>(enabledInstanceExtensions));
+	LOG_INFO("Initializing Vulkan instance");
+	auto context = initVulkan(instanceExtensionCount, enabledInstanceExtensions, 0, nullptr);
+	LOG_DEBUG("Vulkan instance initialized");
 
 	while (handleMessage()) {
 

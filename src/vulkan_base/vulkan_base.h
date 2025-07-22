@@ -1,7 +1,12 @@
-#include <vulkan/vulkan.hpp>
+#pragma once
+
 #include <cassert>
 
-#include "../logger.h"
+#include <vulkan/vulkan.hpp>
+
+#include "logger.h"
+#include "types.h"
+
 
 #define VKA(expr)													\
 	([&]() -> decltype(auto) {										\
@@ -10,18 +15,23 @@
 		}															\
 		catch (const vk::SystemError& err) {						\
 			LOG_DEBUG("Vulkan error: " + std::string(err.what()));	\
-			assert(false);											\
-			using ReturnType = decltype(expr);						\
-			return ReturnType{}; /* fallback return */				\
+			throw;                                                  \
 		}															\
 	}())
 
 #define VK(func) (func)
 
-struct VulkanContext {
-	VkInstance instance;
-	VkPhysicalDevice physicalDevice;
-	VkPhysicalDeviceProperties physicalDeviceProperties;
+struct VulkanQueue {
+	vk::Queue queue{};
+	u32 familyIndex = 0;
 };
 
-std::unique_ptr<VulkanContext>  initVulkan(uint32_t instanceExtensionsCount, const char** instanceExtensions);
+struct VulkanContext {
+	vk::Instance instance{};
+	vk::PhysicalDevice physicalDevice{};
+	vk::PhysicalDeviceProperties physicalDeviceProperties{};
+	vk::Device device{};
+	VulkanQueue graphicsQueue{};
+};
+
+std::unique_ptr<VulkanContext> initVulkan(u32 instanceExtensionsCount, const char* const* instanceExtensions, u32 deviceExtensionsCount, const char* const* deviceExtensions);

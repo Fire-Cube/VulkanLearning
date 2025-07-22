@@ -9,11 +9,12 @@ set(CMAKE_CXX_STANDARD 20)
 # Set SDL_STATIC to ON to build SDL3 as a static library 
 set(SDL_STATIC ON)
 
-# Set the output directory for the executable
-set(CMake_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
-
 # Set all source files
-set(SOURCE_FILES src/main.cpp src/logger.cpp src/vulkan_base/vulkan_device.cpp)
+set(SOURCE_FILES
+        src/main.cpp
+        src/logger.cpp
+        src/vulkan_base/vulkan_device.cpp
+)
 
 # Find SDL2
 add_subdirectory(libs/SDL)
@@ -23,6 +24,9 @@ find_package(Vulkan REQUIRED)
 
 # Add executable target with source files listed in SOURCE_FILES variable
 add_executable(VulkanLearning ${SOURCE_FILES})
+
+# Add /src to search path for headers
+target_include_directories(VulkanLearning PUBLIC ${PROJECT_SOURCE_DIR}/src)
 
 # Include SDL3
 target_include_directories(VulkanLearning PUBLIC libs/SDL/include)
