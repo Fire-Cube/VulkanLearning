@@ -15,6 +15,7 @@ set(SOURCE_FILES
         src/logger.cpp
         src/vulkan_base/vulkan_device.cpp
         src/vulkan_base/vulkan_swapchain.cpp
+        src/vulkan_base/vulkan_renderpass.cpp
 )
 
 # Find SDL2

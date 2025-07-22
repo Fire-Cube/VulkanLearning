@@ -137,3 +137,9 @@ std::unique_ptr<VulkanContext> initVulkan(u32 instanceExtensionsCount, const cha
 
 	return context;
 }
+
+void exitVulkan(VulkanContext* context) {
+	VKA(context->device.waitIdle());
+	VKA(context->device.destroy());
+	VKA(context->instance.destroy());
+}

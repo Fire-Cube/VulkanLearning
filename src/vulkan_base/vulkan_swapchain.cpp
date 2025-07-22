@@ -1,7 +1,7 @@
 #include "vulkan_base.h"
 
 VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, vk::ImageUsageFlags imageUsage) {
-    VulkanSwapchain result_swapchain{};
+    VulkanSwapchain result_swapchain {};
 
     auto supportsPresent = VKA(context->physicalDevice.getSurfaceSupportKHR(context->graphicsQueue.familyIndex, surface));
     if (!supportsPresent) {
@@ -33,7 +33,7 @@ VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, 
         surfaceCapabilities.maxImageCount = 8; // Todo: Bigger than minImageCount
     }
 
-    vk::SwapchainCreateInfoKHR createInfoSwapchain{};
+    vk::SwapchainCreateInfoKHR createInfoSwapchain {};
     createInfoSwapchain.surface = surface;
     createInfoSwapchain.minImageCount = 3;
     createInfoSwapchain.imageFormat = format;
@@ -47,7 +47,6 @@ VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, 
     createInfoSwapchain.presentMode = vk::PresentModeKHR::eFifo;
     VKA(context->device.createSwapchainKHR(&createInfoSwapchain, nullptr, &result_swapchain.swapchain));
 
-
     result_swapchain.format = format;
     result_swapchain.width = surfaceCapabilities.currentExtent.width;
     result_swapchain.height = surfaceCapabilities.currentExtent.height;
@@ -56,9 +55,25 @@ VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, 
     result_swapchain.images.resize(numImages);
     result_swapchain.images = context->device.getSwapchainImagesKHR(result_swapchain.swapchain);
 
+    // ImageViews
+    result_swapchain.imageViews.resize(numImages);
+    for (u32 i = 0; i < numImages; i++) {
+        vk::ImageViewCreateInfo imageViewCreateInfo {};
+        imageViewCreateInfo.image = result_swapchain.images[i];
+        imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
+        imageViewCreateInfo.format = format;
+        imageViewCreateInfo.components = { vk::ComponentSwizzle::eIdentity };
+        imageViewCreateInfo.subresourceRange = { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 };
+
+        result_swapchain.imageViews[i] = VKA(context->device.createImageView(imageViewCreateInfo));
+    }
+
     return result_swapchain;
 }
 
 void destroySwapchain(VulkanContext* context, VulkanSwapchain* swapchain) {
+    for (auto& view : swapchain->imageViews) {
+        context->device.destroyImageView(view);
+    }
     VK(context->device.destroySwapchainKHR(swapchain->swapchain, nullptr));
 }

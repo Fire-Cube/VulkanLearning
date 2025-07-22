@@ -37,7 +37,7 @@ int main() {
 	LOG_INFO("--- Program started ---");
 	LOG_INFO("Start time: " + getCurrentTimeFormatted());
 
-	if (SDL_Init(SDL_INIT_VIDEO) != true) { // SDL returns true on success
+	if (!SDL_Init(SDL_INIT_VIDEO)) { // SDL returns true on success
 		LOG_ERROR("Error initializing SDL: " + std::string(SDL_GetError()));
 		return 1;
 	}
@@ -61,14 +61,41 @@ int main() {
 	VkSurfaceKHR surface;
 	SDL_Vulkan_CreateSurface(window, context->instance, nullptr, &surface);
 	VulkanSwapchain swapchain = createSwapchain(context.get(), surface, vk::ImageUsageFlagBits::eColorAttachment);
+	vk::RenderPass renderPass = createRenderPass(context.get(), swapchain.format);
+
+	std::vector<vk::Framebuffer> framebuffers;
+	framebuffers.resize(swapchain.images.size());
+	for (u32 i = 0; i < swapchain.images.size(); i++) {
+		vk::FramebufferCreateInfo framebufferCreateInfo {};
+		framebufferCreateInfo.renderPass = renderPass;
+		framebufferCreateInfo.attachmentCount = 1;
+		framebufferCreateInfo.pAttachments = &swapchain.imageViews[i];
+		framebufferCreateInfo.width = swapchain.width;
+		framebufferCreateInfo.height = swapchain.height;
+		framebufferCreateInfo.layers = 1;
+
+		VKA(framebuffers[i] = context->device.createFramebuffer(framebufferCreateInfo));
+	}
 
 	while (handleMessage()) {
 
 	}
 
 	VKA(context->device.waitIdle());
+
+	for (auto& framebuffer : framebuffers) {
+		context->device.destroyFramebuffer(framebuffer);
+	}
+	framebuffers.clear();
+
+	destroyRenderPass(context.get(), renderPass);
 	destroySwapchain(context.get(), &swapchain);
+
+	context->instance.destroySurfaceKHR(surface);
+	exitVulkan(context.get());
+
 	SDL_DestroyWindow(window);
 	SDL_Quit();
+
 	return 0;
 }
