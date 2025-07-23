@@ -37,3 +37,15 @@ target_link_libraries(VulkanLearning PUBLIC SDL3-static)
 # Include Vulkan
 target_include_directories(VulkanLearning PUBLIC ${Vulkan_INCLUDE_DIRS})
 target_link_libraries(VulkanLearning PUBLIC ${Vulkan_LIBRARIES})
+
+# Shader compilation
+include("src/shaders/CompileShaders.cmake")
+
+set(SHADERS
+        ${CMAKE_SOURCE_DIR}/src/shaders/triangle.vert
+        ${CMAKE_SOURCE_DIR}/src/shaders/triangle.frag
+)
+
+compile_shaders(TARGET shaders FILES ${SHADERS})
+
+add_dependencies(VulkanLearning shaders)
