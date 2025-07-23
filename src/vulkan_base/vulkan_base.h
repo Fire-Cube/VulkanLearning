@@ -44,7 +44,7 @@ struct VulkanContext {
 };
 
 // vulkan_device.cpp
-std::unique_ptr<VulkanContext> initVulkan(u32 instanceExtensionsCount, const char* const* instanceExtensions, u32 deviceExtensionsCount, const char* const* deviceExtensions);
+bool initVulkan(VulkanContext* context, u32 instanceExtensionsCount, const char* const* instanceExtensions, u32 deviceExtensionsCount, const char* const* deviceExtensions);
 void exitVulkan(VulkanContext* context);
 
 // vulkan_swapchain.cpp

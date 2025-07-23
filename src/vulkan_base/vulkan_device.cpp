@@ -120,22 +120,20 @@ bool createLogicalDevice(VulkanContext* context, u32 deviceExtensionsCount, cons
 	return true;
 }
 
-std::unique_ptr<VulkanContext> initVulkan(u32 instanceExtensionsCount, const char* const* instanceExtensions, u32 deviceExtensionsCount, const char* const* deviceExtensions) {
-	auto context = std::make_unique<VulkanContext>();
-
-	if (!initVulkanInstance(context.get(), instanceExtensionsCount, instanceExtensions)) {
-		return nullptr;
+bool initVulkan(VulkanContext* context, u32 instanceExtensionsCount, const char* const* instanceExtensions, u32 deviceExtensionsCount, const char* const* deviceExtensions) {
+	if (!initVulkanInstance(context, instanceExtensionsCount, instanceExtensions)) {
+		return false;
 	}
 
-	if (!selectPhysicalDevice(context.get())) {
-		return nullptr;
+	if (!selectPhysicalDevice(context)) {
+		return false;
 	}
 
-	if (!createLogicalDevice(context.get(), deviceExtensionsCount, deviceExtensions)) {
-		return nullptr;
+	if (!createLogicalDevice(context, deviceExtensionsCount, deviceExtensions)) {
+		return false;
 	}
 
-	return context;
+	return true;
 }
 
 void exitVulkan(VulkanContext* context) {

@@ -1,10 +1,12 @@
 #pragma once
 
+#include <ctime>
 #include <string>
 #include <string_view>
 #include <span>
 #include <format>
 #include <sstream>
+#include <iomanip>
 
 namespace utils {
 
@@ -37,7 +39,20 @@ namespace utils {
 
     template<class T>
     std::string fmt_ptr(T* p) {
-        std::ostringstream o; o << (const void*)p; return o.str();
+        std::ostringstream o; o << static_cast<const void*>(p); return o.str();
+    }
+
+    inline std::string getCurrentTimeFormatted() {
+        std::time_t now = std::time(nullptr);
+
+#ifdef WIN32
+        std::tm localTime{};
+        localtime_s(&localTime, &now);
+#endif
+
+        std::ostringstream oss;
+        oss << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S");
+        return oss.str();
     }
 
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof(array[0]))
