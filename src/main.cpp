@@ -14,6 +14,9 @@ VkSurfaceKHR surface;
 VulkanSwapchain swapchain;
 vk::RenderPass renderPass;
 std::vector<vk::Framebuffer> framebuffers;
+vk::CommandPool commandPool;
+vk::CommandBuffer commandBuffer;
+vk::Fence fence;
 
 bool handleMessage() {
 	SDL_Event event;
@@ -52,16 +55,75 @@ void initApplication(SDL_Window* window) {
 		framebufferCreateInfo.height = swapchain.height;
 		framebufferCreateInfo.layers = 1;
 
-		VKA(framebuffers[i] = context->device.createFramebuffer(framebufferCreateInfo));
+		framebuffers[i] = VKA(context->device.createFramebuffer(framebufferCreateInfo));
 	}
+
+	vk::FenceCreateInfo fenceCreateInfo {};
+	fence = VKA(context->device.createFence(fenceCreateInfo));
+
+	vk::CommandPoolCreateInfo commandPoolCreateInfo {};
+	commandPoolCreateInfo.flags = vk::CommandPoolCreateFlagBits::eTransient;
+	commandPoolCreateInfo.queueFamilyIndex = context->graphicsQueue.familyIndex;
+
+	commandPool = VKA(context->device.createCommandPool(commandPoolCreateInfo));
+
+	vk::CommandBufferAllocateInfo commandBufferAllocateInfo {};
+	commandBufferAllocateInfo.commandPool = commandPool;
+	commandBufferAllocateInfo.level = vk::CommandBufferLevel::ePrimary;
+	commandBufferAllocateInfo.commandBufferCount = 1;
+
+	auto commandBuffers = VKA(context->device.allocateCommandBuffers(commandBufferAllocateInfo));
+	commandBuffer = commandBuffers.front();
 }
 
 void renderApplication() {
+	VKA(context->device.resetCommandPool(commandPool));
+
+	u32 imageIndex = VK(context->device.acquireNextImageKHR(swapchain.swapchain, UINT64_MAX, nullptr, fence).value);
+
+	vk::CommandBufferBeginInfo commandBufferBeginInfo {};
+	commandBufferBeginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
+
+	VKA(commandBuffer.begin(commandBufferBeginInfo));
+
+	vk::ClearValue clearValue = vk::ClearColorValue{1.0f, 0.0f, 1.0f, 1.0f};
+
+	vk::RenderPassBeginInfo renderPassBeginInfo {};
+	renderPassBeginInfo.renderPass = renderPass;
+	renderPassBeginInfo.framebuffer = framebuffers[imageIndex];
+	renderPassBeginInfo.renderArea = vk::Rect2D( {0, 0}, {swapchain.width, swapchain.height} );
+	renderPassBeginInfo.clearValueCount = 1;
+	renderPassBeginInfo.pClearValues = &clearValue;
+
+	commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
+	commandBuffer.endRenderPass();
+
+	VKA(commandBuffer.end());
+
+	VKA(context->device.waitForFences(fence, true, UINT64_MAX));
+	VKA(context->device.resetFences(fence));
+
+	vk::SubmitInfo submitInfo {};
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+	VKA(context->graphicsQueue.queue.submit(submitInfo));
+
+	VKA(context->graphicsQueue.queue.waitIdle());
+
+	vk::PresentInfoKHR presentInfo {};
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &swapchain.swapchain;
+	presentInfo.pImageIndices = &imageIndex;
+
+	VK(context->graphicsQueue.queue.presentKHR(presentInfo));
 
 }
 
 void cleanupApplication() {
 	VKA(context->device.waitIdle());
+
+	VK(context->device.destroyFence(fence));
+	VK(context->device.destroyCommandPool(commandPool));
 
 	for (auto& framebuffer : framebuffers) {
 		context->device.destroyFramebuffer(framebuffer);
