@@ -1,7 +1,13 @@
 #define SDL_MAIN_HANDLED
 
+#include <chrono>
+#include <thread>
+
+#include <windows.h>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
+#include <SDL3/SDL_system.h>
 
 #include "logger.h"
 #include "utils.h"
@@ -23,15 +29,44 @@ vk::Fence fences[FRAMES_IN_FLIGHT];
 vk::Semaphore acquireSemaphores[FRAMES_IN_FLIGHT];
 vk::Semaphore releaseSemaphores[FRAMES_IN_FLIGHT];
 
-bool handleMessage() {
-	SDL_Event event;
-	while (SDL_PollEvent(&event)) {
-		switch (event.type) {
-		case SDL_EVENT_QUIT:
-			return false;
+bool windowResized = false;
+bool windowMinimized = false;
+
+void recreateRenderPass() {
+	if (renderPass) {
+		for (auto& framebuffer : framebuffers) {
+			context->device.destroyFramebuffer(framebuffer);
 		}
+		framebuffers.clear();
+
+		destroyRenderPass(context, renderPass);
 	}
-	return true;
+
+	renderPass = createRenderPass(context, swapchain.format);
+
+	framebuffers.resize(swapchain.images.size());
+	for (u32 i = 0; i < swapchain.images.size(); i++) {
+		vk::FramebufferCreateInfo framebufferCreateInfo {};
+		framebufferCreateInfo.renderPass = renderPass;
+		framebufferCreateInfo.attachmentCount = 1;
+		framebufferCreateInfo.pAttachments = &swapchain.imageViews[i];
+		framebufferCreateInfo.width = swapchain.width;
+		framebufferCreateInfo.height = swapchain.height;
+		framebufferCreateInfo.layers = 1;
+
+		framebuffers[i] = VKA(context->device.createFramebuffer(framebufferCreateInfo));
+	}
+}
+
+void recreateSwapchain() {
+	VulkanSwapchain oldSwapchain = swapchain;
+
+	VKA(context->device.waitIdle());
+
+	swapchain = createSwapchain(context, surface, vk::ImageUsageFlagBits::eColorAttachment, &oldSwapchain);
+
+	destroySwapchain(context, &oldSwapchain);
+	recreateRenderPass();
 }
 
 void initApplication(SDL_Window* window) {
@@ -50,18 +85,7 @@ void initApplication(SDL_Window* window) {
 	swapchain = createSwapchain(context, surface, vk::ImageUsageFlagBits::eColorAttachment);
 	renderPass = createRenderPass(context, swapchain.format);
 
-	framebuffers.resize(swapchain.images.size());
-	for (u32 i = 0; i < swapchain.images.size(); i++) {
-		vk::FramebufferCreateInfo framebufferCreateInfo {};
-		framebufferCreateInfo.renderPass = renderPass;
-		framebufferCreateInfo.attachmentCount = 1;
-		framebufferCreateInfo.pAttachments = &swapchain.imageViews[i];
-		framebufferCreateInfo.width = swapchain.width;
-		framebufferCreateInfo.height = swapchain.height;
-		framebufferCreateInfo.layers = 1;
-
-		framebuffers[i] = VKA(context->device.createFramebuffer(framebufferCreateInfo));
-	}
+	recreateRenderPass();
 
 	pipeline = createPipeline(context, "shaders/triangle.vert.spv", "shaders/triangle.frag.spv", renderPass, swapchain.width, swapchain.height);
 
@@ -104,6 +128,17 @@ void initApplication(SDL_Window* window) {
 void renderApplication() {
 	static u32 frameIndex = 0;
 
+	vk::SurfaceCapabilitiesKHR surfaceCapabilities = VKA(context->physicalDevice.getSurfaceCapabilitiesKHR(surface));
+	if (windowMinimized || (surfaceCapabilities.currentExtent.width == 0 || surfaceCapabilities.currentExtent.height == 0)) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		return;
+	}
+
+	if (windowResized) {
+		recreateSwapchain();
+		windowResized = false;
+	}
+
 	VKA(context->device.waitForFences(fences[frameIndex], true, UINT64_MAX));
 	VKA(context->device.resetFences(fences[frameIndex]));
 
@@ -131,6 +166,12 @@ void renderApplication() {
 		commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
 
 		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.pipeline);
+
+		vk::Viewport viewport { 0.0f, 0.0f, static_cast<float>(swapchain.width), static_cast<float>(swapchain.height)};
+		vk::Rect2D scissor { {0, 0}, {swapchain.width, swapchain.height} } ;
+
+		commandBuffer.setViewport(0, 1, &viewport);
+		commandBuffer.setScissor(0, 1, &scissor);
 		commandBuffer.draw(3, 1, 0, 0);
 
 		commandBuffer.endRenderPass();
@@ -192,6 +233,40 @@ void cleanupApplication() {
 	exitVulkan(context);
 }
 
+bool handleMessage() {
+	SDL_Event event;
+	while (SDL_PollEvent(&event)) {
+		switch (event.type) {
+		case SDL_EVENT_QUIT:
+			return false;
+
+		case SDL_EVENT_WINDOW_RESIZED:
+			windowResized = true;
+			break;
+
+		case SDL_EVENT_WINDOW_MINIMIZED:
+			windowMinimized = true;
+			break;
+
+		case SDL_EVENT_WINDOW_RESTORED:
+			windowMinimized = false;
+			windowResized = true;
+			break;
+
+		default: ;
+		}
+	}
+	return true;
+}
+
+bool SDLCALL winMessageHook(void *userdata, MSG *msg) {
+	if (msg->message == WM_SIZING) {
+		windowResized = true;
+		renderApplication();
+	}
+	return true;
+}
+
 int main() {
 	LOG_INFO("--- Program started ---");
 	LOG_INFO("Start time: " + utils::getCurrentTimeFormatted());
@@ -201,11 +276,13 @@ int main() {
 		return 1;
 	}
 
-	SDL_Window* window = SDL_CreateWindow("VulkanLearning", 1240, 720, SDL_WINDOW_VULKAN);
+	SDL_Window* window = SDL_CreateWindow("VulkanLearning", 1240, 720, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 	if (!window) {
 		LOG_ERROR("Error creating window: " + std::string(SDL_GetError()));
 		return 1;
 	}
+
+	SDL_SetWindowsMessageHook(winMessageHook, window);
 
 	VulkanContext ctx;
 	context = &ctx;

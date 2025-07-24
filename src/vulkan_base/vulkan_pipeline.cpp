@@ -49,14 +49,9 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
     vk::PipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo {};
     inputAssemblyStateCreateInfo.topology = vk::PrimitiveTopology::eTriangleList;
 
-    vk::Viewport viewport { 0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)};
-    vk::Rect2D scissor { {0, 0}, {width, height} } ;
-
     vk::PipelineViewportStateCreateInfo viewportStateCreateInfo {};
     viewportStateCreateInfo.viewportCount = 1;
-    viewportStateCreateInfo.pViewports = &viewport;
     viewportStateCreateInfo.scissorCount = 1;
-    viewportStateCreateInfo.pScissors = &scissor;
 
     vk::PipelineRasterizationStateCreateInfo rasterizationStateCreateInfo {};
     rasterizationStateCreateInfo.lineWidth = 1.0f;
@@ -72,8 +67,14 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
     colorBlendStateCreateInfo.attachmentCount = 1;
     colorBlendStateCreateInfo.pAttachments = &colorBlendAttachmentState;
 
-    vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo {};
-    vk::PipelineLayout pipelineLayout = VKA(context->device.createPipelineLayout(pipelineLayoutCreateInfo));
+    vk::PipelineLayoutCreateInfo layoutCreateInfo {};
+    vk::PipelineLayout pipelineLayout = VKA(context->device.createPipelineLayout(layoutCreateInfo));
+
+    vk::DynamicState dynamicStates[] = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+
+    vk::PipelineDynamicStateCreateInfo dynamicStateCreateInfo {};
+    dynamicStateCreateInfo.dynamicStateCount = ARRAY_COUNT(dynamicStates);
+    dynamicStateCreateInfo.pDynamicStates = dynamicStates;
 
     vk::GraphicsPipelineCreateInfo pipelineCreateInfo {};
     pipelineCreateInfo.stageCount = ARRAY_COUNT(shaderStages);
@@ -84,6 +85,7 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
     pipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
     pipelineCreateInfo.pMultisampleState = &multisampleStateCreateInfo;
     pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
+    pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
     pipelineCreateInfo.layout = pipelineLayout;
     pipelineCreateInfo.renderPass = renderPass;
     pipelineCreateInfo.subpass = 0;

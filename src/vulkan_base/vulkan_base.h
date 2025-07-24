@@ -53,7 +53,7 @@ bool initVulkan(VulkanContext* context, u32 instanceExtensionsCount, const char*
 void exitVulkan(VulkanContext* context);
 
 // vulkan_swapchain.cpp
-VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, vk::ImageUsageFlags imageUsage);
+VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, vk::ImageUsageFlags imageUsage, VulkanSwapchain* oldSwapchain=nullptr);
 void destroySwapchain(VulkanContext* context, VulkanSwapchain* swapchain);
 
 // vulkan_renderpass.cpp

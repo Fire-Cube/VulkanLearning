@@ -1,6 +1,6 @@
 #include "vulkan_base.h"
 
-VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, vk::ImageUsageFlags imageUsage) {
+VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, vk::ImageUsageFlags imageUsage, VulkanSwapchain* oldSwapchain) {
     VulkanSwapchain result_swapchain {};
 
     auto supportsPresent = VKA(context->physicalDevice.getSurfaceSupportKHR(context->graphicsQueue.familyIndex, surface));
@@ -33,19 +33,20 @@ VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, 
         surfaceCapabilities.maxImageCount = 8; // Todo: Bigger than minImageCount
     }
 
-    vk::SwapchainCreateInfoKHR createInfoSwapchain {};
-    createInfoSwapchain.surface = surface;
-    createInfoSwapchain.minImageCount = 3;
-    createInfoSwapchain.imageFormat = format;
-    createInfoSwapchain.imageColorSpace = colorSpace;
-    createInfoSwapchain.imageExtent = surfaceCapabilities.currentExtent;
-    createInfoSwapchain.imageArrayLayers = 1;
-    createInfoSwapchain.imageUsage = imageUsage;
-    createInfoSwapchain.imageSharingMode = vk::SharingMode::eExclusive;
-    createInfoSwapchain.preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity;
-    createInfoSwapchain.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
-    createInfoSwapchain.presentMode = vk::PresentModeKHR::eFifo;
-    VKA(context->device.createSwapchainKHR(&createInfoSwapchain, nullptr, &result_swapchain.swapchain));
+    vk::SwapchainCreateInfoKHR swapchainCreateInfo {};
+    swapchainCreateInfo.surface = surface;
+    swapchainCreateInfo.minImageCount = 3;
+    swapchainCreateInfo.imageFormat = format;
+    swapchainCreateInfo.imageColorSpace = colorSpace;
+    swapchainCreateInfo.imageExtent = surfaceCapabilities.currentExtent;
+    swapchainCreateInfo.imageArrayLayers = 1;
+    swapchainCreateInfo.imageUsage = imageUsage;
+    swapchainCreateInfo.imageSharingMode = vk::SharingMode::eExclusive;
+    swapchainCreateInfo.preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity;
+    swapchainCreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+    swapchainCreateInfo.presentMode = vk::PresentModeKHR::eFifo;
+    swapchainCreateInfo.oldSwapchain = oldSwapchain ? oldSwapchain->swapchain : VK_NULL_HANDLE;
+    VKA(context->device.createSwapchainKHR(&swapchainCreateInfo, nullptr, &result_swapchain.swapchain));
 
     result_swapchain.format = format;
     result_swapchain.width = surfaceCapabilities.currentExtent.width;
