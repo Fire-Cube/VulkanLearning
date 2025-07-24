@@ -9,17 +9,19 @@
 
 Logger globalLogger("VulkanLearning.log");
 
+#define FRAMES_IN_FLIGHT 2
+
 VulkanContext* context = nullptr;
 VkSurfaceKHR surface;
 VulkanSwapchain swapchain;
 vk::RenderPass renderPass;
 std::vector<vk::Framebuffer> framebuffers;
 VulkanPipeline pipeline;
-vk::CommandPool commandPool;
-vk::CommandBuffer commandBuffer;
-vk::Fence fence;
-vk::Semaphore acquireSemaphore;
-vk::Semaphore releaseSemaphore;
+vk::CommandPool commandPools[FRAMES_IN_FLIGHT];
+vk::CommandBuffer commandBuffers[FRAMES_IN_FLIGHT];
+vk::Fence fences[FRAMES_IN_FLIGHT];
+vk::Semaphore acquireSemaphores[FRAMES_IN_FLIGHT];
+vk::Semaphore releaseSemaphores[FRAMES_IN_FLIGHT];
 
 bool handleMessage() {
 	SDL_Event event;
@@ -63,96 +65,124 @@ void initApplication(SDL_Window* window) {
 
 	pipeline = createPipeline(context, "shaders/triangle.vert.spv", "shaders/triangle.frag.spv", renderPass, swapchain.width, swapchain.height);
 
-	vk::FenceCreateInfo fenceCreateInfo {};
-	fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
+	for (auto &fence : fences) {
+		vk::FenceCreateInfo fenceCreateInfo {};
+		fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
 
-	fence = VKA(context->device.createFence(fenceCreateInfo));
+		fence = VKA(context->device.createFence(fenceCreateInfo));
+	}
 
-	vk::SemaphoreCreateInfo semaphoreCreateInfo {};
-	acquireSemaphore = VKA(context->device.createSemaphore(semaphoreCreateInfo));
-	releaseSemaphore = VKA(context->device.createSemaphore(semaphoreCreateInfo));
+	for (auto &acquireSemaphore : acquireSemaphores) {
+		vk::SemaphoreCreateInfo semaphoreCreateInfo {};
+		acquireSemaphore = VKA(context->device.createSemaphore(semaphoreCreateInfo));
+	}
 
-	vk::CommandPoolCreateInfo commandPoolCreateInfo {};
-	commandPoolCreateInfo.flags = vk::CommandPoolCreateFlagBits::eTransient;
-	commandPoolCreateInfo.queueFamilyIndex = context->graphicsQueue.familyIndex;
+	for (auto &releaseSemaphore : releaseSemaphores) {
+		vk::SemaphoreCreateInfo semaphoreCreateInfo {};
+		releaseSemaphore = VKA(context->device.createSemaphore(semaphoreCreateInfo));
+	}
 
-	commandPool = VKA(context->device.createCommandPool(commandPoolCreateInfo));
+	for (auto &commandPool : commandPools) {
+		vk::CommandPoolCreateInfo commandPoolCreateInfo {};
+		commandPoolCreateInfo.flags = vk::CommandPoolCreateFlagBits::eTransient;
+		commandPoolCreateInfo.queueFamilyIndex = context->graphicsQueue.familyIndex;
 
-	vk::CommandBufferAllocateInfo commandBufferAllocateInfo {};
-	commandBufferAllocateInfo.commandPool = commandPool;
-	commandBufferAllocateInfo.level = vk::CommandBufferLevel::ePrimary;
-	commandBufferAllocateInfo.commandBufferCount = 1;
+		commandPool = VKA(context->device.createCommandPool(commandPoolCreateInfo));
+	}
 
-	auto commandBuffers = VKA(context->device.allocateCommandBuffers(commandBufferAllocateInfo));
-	commandBuffer = commandBuffers.front();
+	for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
+		vk::CommandBufferAllocateInfo commandBufferAllocateInfo {};
+		commandBufferAllocateInfo.commandPool = commandPools[i];
+		commandBufferAllocateInfo.level = vk::CommandBufferLevel::ePrimary;
+		commandBufferAllocateInfo.commandBufferCount = 1;
+
+		auto commandBuffersCreated = VKA(context->device.allocateCommandBuffers(commandBufferAllocateInfo));
+		commandBuffers[i] = commandBuffersCreated.front();
+	}
 }
 
 void renderApplication() {
-	VKA(context->device.waitForFences(fence, true, UINT64_MAX));
-	VKA(context->device.resetFences(fence));
+	static u32 frameIndex = 0;
 
-	u32 imageIndex = VK(context->device.acquireNextImageKHR(swapchain.swapchain, UINT64_MAX, acquireSemaphore, nullptr).value);
+	VKA(context->device.waitForFences(fences[frameIndex], true, UINT64_MAX));
+	VKA(context->device.resetFences(fences[frameIndex]));
 
-	VKA(context->device.resetCommandPool(commandPool));
+	u32 imageIndex = VK(context->device.acquireNextImageKHR(swapchain.swapchain, UINT64_MAX, acquireSemaphores[frameIndex], nullptr).value);
 
-	vk::CommandBufferBeginInfo commandBufferBeginInfo {};
-	commandBufferBeginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
+	VKA(context->device.resetCommandPool(commandPools[frameIndex]));
 
-	VKA(commandBuffer.begin(commandBufferBeginInfo));
+	{
+		auto commandBuffer = commandBuffers[frameIndex];
 
-	vk::ClearValue clearValue = vk::ClearColorValue{1.0f, 0.0f, 1.0f, 1.0f};
+		vk::CommandBufferBeginInfo commandBufferBeginInfo {};
+		commandBufferBeginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
 
-	vk::RenderPassBeginInfo renderPassBeginInfo {};
-	renderPassBeginInfo.renderPass = renderPass;
-	renderPassBeginInfo.framebuffer = framebuffers[imageIndex];
-	renderPassBeginInfo.renderArea = vk::Rect2D( {0, 0}, {swapchain.width, swapchain.height} );
-	renderPassBeginInfo.clearValueCount = 1;
-	renderPassBeginInfo.pClearValues = &clearValue;
+		VKA(commandBuffer.begin(commandBufferBeginInfo));
 
-	commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
+		vk::ClearValue clearValue = vk::ClearColorValue{1.0f, 0.0f, 1.0f, 1.0f};
 
-	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.pipeline);
-	commandBuffer.draw(3, 1, 0, 0);
+		vk::RenderPassBeginInfo renderPassBeginInfo {};
+		renderPassBeginInfo.renderPass = renderPass;
+		renderPassBeginInfo.framebuffer = framebuffers[imageIndex];
+		renderPassBeginInfo.renderArea = vk::Rect2D( {0, 0}, {swapchain.width, swapchain.height} );
+		renderPassBeginInfo.clearValueCount = 1;
+		renderPassBeginInfo.pClearValues = &clearValue;
 
-	commandBuffer.endRenderPass();
+		commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
 
-	VKA(commandBuffer.end());
+		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.pipeline);
+		commandBuffer.draw(3, 1, 0, 0);
+
+		commandBuffer.endRenderPass();
+
+		VKA(commandBuffer.end());
+	}
 
 	vk::PipelineStageFlags stageFlags {vk::PipelineStageFlagBits::eColorAttachmentOutput};
 
 	vk::SubmitInfo submitInfo {};
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
+	submitInfo.pCommandBuffers = &commandBuffers[frameIndex];
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &acquireSemaphore;
+	submitInfo.pWaitSemaphores = &acquireSemaphores[frameIndex];
 	submitInfo.pWaitDstStageMask = &stageFlags;
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &releaseSemaphore;
+	submitInfo.pSignalSemaphores = &releaseSemaphores[frameIndex];
 
-	VKA(context->graphicsQueue.queue.submit(submitInfo, fence));
+	VKA(context->graphicsQueue.queue.submit(submitInfo, fences[frameIndex]));
 
 	vk::PresentInfoKHR presentInfo {};
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &swapchain.swapchain;
 	presentInfo.pImageIndices = &imageIndex;
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &releaseSemaphore;
+	presentInfo.pWaitSemaphores = &releaseSemaphores[frameIndex];
 
 	VKA(context->graphicsQueue.queue.presentKHR(presentInfo));
+
+	frameIndex = (frameIndex + 1) % FRAMES_IN_FLIGHT;
 
 }
 
 void cleanupApplication() {
 	VKA(context->device.waitIdle());
 
-	VK(context->device.destroyFence(fence));
-	VK(context->device.destroyCommandPool(commandPool));
+	for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
+		VK(context->device.destroyFence(fences[i]));
+		VK(context->device.destroySemaphore(acquireSemaphores[i]));
+		VK(context->device.destroySemaphore(releaseSemaphores[i]));
+	}
+
+	for (auto &commandPool : commandPools) {
+		VK(context->device.destroyCommandPool(commandPool));
+	}
 
 	destroyPipeline(context, &pipeline);
 
 	for (auto& framebuffer : framebuffers) {
 		context->device.destroyFramebuffer(framebuffer);
 	}
+
 	framebuffers.clear();
 
 	destroyRenderPass(context, renderPass);
