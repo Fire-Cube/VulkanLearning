@@ -1,32 +1,46 @@
 function(compile_shaders)
-    cmake_parse_arguments(ARG "" "TARGET" "FILES" ${ARGN})
-    if(NOT ARG_FILES)
-        message(FATAL_ERROR "compile_shaders(): pass shaders via FILES <list>")
+    if(ARGC LESS 4)
+        message(FATAL_ERROR
+                "Usage: compile_shaders <TARGET> <SRC_DIR> <OUT_DIR> <shader1> [shader2 ...]\n"
+                "Only ${ARGC} argument(s) given."
+        )
     endif()
-    if(NOT ARG_TARGET)
-        set(ARG_TARGET shaders)
-    endif()
+
+    list(GET ARGV 0 target_name)
+    list(GET ARGV 1 shader_source_dir)
+    list(GET ARGV 2 shader_output_dir)
+    list(SUBLIST ARGV 3 -1 shader_files)
 
     find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)
 
-    set(outputs)
-    foreach(src IN LISTS ARG_FILES)
-        cmake_path(RELATIVE_PATH src BASE_DIRECTORY "${CMAKE_SOURCE_DIR}/src/shaders" OUTPUT_VARIABLE rel)
-        cmake_path(GET rel PARENT_PATH rel_dir)
-        set(out "${CMAKE_BINARY_DIR}/shaders/${rel}.spv")
+    set(generated_spvs)
+    foreach(shader_file IN LISTS shader_files)
+        file(RELATIVE_PATH rel_path_src "${shader_source_dir}" "${shader_file}")
+        get_filename_component(rel_dir "${rel_path_src}" PATH)
+
+        set(out_spv "${shader_output_dir}/${rel_path_src}.spv")
+
+        file(RELATIVE_PATH rel_input   "${CMAKE_SOURCE_DIR}" "${shader_file}")
+        file(RELATIVE_PATH rel_output  "${CMAKE_SOURCE_DIR}" "${out_spv}")
 
         add_custom_command(
-                OUTPUT   "${out}"
-                COMMAND  ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/${rel_dir}"
-                COMMAND  ${GLSLANG_VALIDATOR} -V "${src}" -o "${out}"
-                DEPENDS  "${src}"
-                COMMENT  "Compile ${rel} -> ${rel}.spv"
+                OUTPUT   "${out_spv}"
+                COMMAND  ${CMAKE_COMMAND} -E make_directory "${shader_output_dir}/${rel_dir}"
+                COMMAND  ${GLSLANG_VALIDATOR} -s -V "${shader_file}" -o "${out_spv}"
+                DEPENDS  "${shader_file}"
+                COMMENT  "Compile GLSL shader ${rel_input} -> ${rel_output}"
                 VERBATIM
         )
-        list(APPEND outputs "${out}")
+
+        list(APPEND generated_spvs "${out_spv}")
+
     endforeach()
 
-    add_custom_target(${ARG_TARGET} ALL DEPENDS ${outputs})
-    set(${ARG_TARGET}_SPV ${outputs} PARENT_SCOPE)
+    add_custom_target(${target_name}
+            ALL
+            DEPENDS ${generated_spvs}
+    )
+
+    set(${target_name}_SPV ${generated_spvs} PARENT_SCOPE)
 
 endfunction()

@@ -14,6 +14,7 @@ VkSurfaceKHR surface;
 VulkanSwapchain swapchain;
 vk::RenderPass renderPass;
 std::vector<vk::Framebuffer> framebuffers;
+VulkanPipeline pipeline;
 vk::CommandPool commandPool;
 vk::CommandBuffer commandBuffer;
 vk::Fence fence;
@@ -58,6 +59,8 @@ void initApplication(SDL_Window* window) {
 		framebuffers[i] = VKA(context->device.createFramebuffer(framebufferCreateInfo));
 	}
 
+	pipeline = createPipeline(context, "shaders/triangle.vert.spv", "shaders/triangle.frag.spv", renderPass, swapchain.width, swapchain.height);
+
 	vk::FenceCreateInfo fenceCreateInfo {};
 	fence = VKA(context->device.createFence(fenceCreateInfo));
 
@@ -96,6 +99,10 @@ void renderApplication() {
 	renderPassBeginInfo.pClearValues = &clearValue;
 
 	commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
+
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.pipeline);
+	commandBuffer.draw(3, 1, 0, 0);
+
 	commandBuffer.endRenderPass();
 
 	VKA(commandBuffer.end());
@@ -115,7 +122,7 @@ void renderApplication() {
 	presentInfo.pSwapchains = &swapchain.swapchain;
 	presentInfo.pImageIndices = &imageIndex;
 
-	VK(context->graphicsQueue.queue.presentKHR(presentInfo));
+	VKA(context->graphicsQueue.queue.presentKHR(presentInfo));
 
 }
 
@@ -124,6 +131,8 @@ void cleanupApplication() {
 
 	VK(context->device.destroyFence(fence));
 	VK(context->device.destroyCommandPool(commandPool));
+
+	destroyPipeline(context, &pipeline);
 
 	for (auto& framebuffer : framebuffers) {
 		context->device.destroyFramebuffer(framebuffer);

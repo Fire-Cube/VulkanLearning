@@ -16,6 +16,7 @@ set(SOURCE_FILES
         src/vulkan_base/vulkan_device.cpp
         src/vulkan_base/vulkan_swapchain.cpp
         src/vulkan_base/vulkan_renderpass.cpp
+        src/vulkan_base/vulkan_pipeline.cpp
 )
 
 # Find SDL2
@@ -42,10 +43,10 @@ target_link_libraries(VulkanLearning PUBLIC ${Vulkan_LIBRARIES})
 include("src/shaders/CompileShaders.cmake")
 
 set(SHADERS
-        ${CMAKE_SOURCE_DIR}/src/shaders/triangle.vert
-        ${CMAKE_SOURCE_DIR}/src/shaders/triangle.frag
+        "${CMAKE_SOURCE_DIR}/src/shaders/triangle.vert"
+        "${CMAKE_SOURCE_DIR}/src/shaders/triangle.frag"
 )
 
-compile_shaders(TARGET shaders FILES ${SHADERS})
+compile_shaders(shaders "${CMAKE_SOURCE_DIR}/src/shaders" "${CMAKE_BINARY_DIR}/shaders" ${SHADERS})
 
 add_dependencies(VulkanLearning shaders)
