@@ -18,6 +18,8 @@ VulkanPipeline pipeline;
 vk::CommandPool commandPool;
 vk::CommandBuffer commandBuffer;
 vk::Fence fence;
+vk::Semaphore acquireSemaphore;
+vk::Semaphore releaseSemaphore;
 
 bool handleMessage() {
 	SDL_Event event;
@@ -62,7 +64,13 @@ void initApplication(SDL_Window* window) {
 	pipeline = createPipeline(context, "shaders/triangle.vert.spv", "shaders/triangle.frag.spv", renderPass, swapchain.width, swapchain.height);
 
 	vk::FenceCreateInfo fenceCreateInfo {};
+	fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
+
 	fence = VKA(context->device.createFence(fenceCreateInfo));
+
+	vk::SemaphoreCreateInfo semaphoreCreateInfo {};
+	acquireSemaphore = VKA(context->device.createSemaphore(semaphoreCreateInfo));
+	releaseSemaphore = VKA(context->device.createSemaphore(semaphoreCreateInfo));
 
 	vk::CommandPoolCreateInfo commandPoolCreateInfo {};
 	commandPoolCreateInfo.flags = vk::CommandPoolCreateFlagBits::eTransient;
@@ -80,9 +88,12 @@ void initApplication(SDL_Window* window) {
 }
 
 void renderApplication() {
-	VKA(context->device.resetCommandPool(commandPool));
+	VKA(context->device.waitForFences(fence, true, UINT64_MAX));
+	VKA(context->device.resetFences(fence));
 
-	u32 imageIndex = VK(context->device.acquireNextImageKHR(swapchain.swapchain, UINT64_MAX, nullptr, fence).value);
+	u32 imageIndex = VK(context->device.acquireNextImageKHR(swapchain.swapchain, UINT64_MAX, acquireSemaphore, nullptr).value);
+
+	VKA(context->device.resetCommandPool(commandPool));
 
 	vk::CommandBufferBeginInfo commandBufferBeginInfo {};
 	commandBufferBeginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
@@ -107,20 +118,25 @@ void renderApplication() {
 
 	VKA(commandBuffer.end());
 
-	VKA(context->device.waitForFences(fence, true, UINT64_MAX));
-	VKA(context->device.resetFences(fence));
+	vk::PipelineStageFlags stageFlags {vk::PipelineStageFlagBits::eColorAttachmentOutput};
 
 	vk::SubmitInfo submitInfo {};
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer;
-	VKA(context->graphicsQueue.queue.submit(submitInfo));
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &acquireSemaphore;
+	submitInfo.pWaitDstStageMask = &stageFlags;
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &releaseSemaphore;
 
-	VKA(context->graphicsQueue.queue.waitIdle());
+	VKA(context->graphicsQueue.queue.submit(submitInfo, fence));
 
 	vk::PresentInfoKHR presentInfo {};
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &swapchain.swapchain;
 	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &releaseSemaphore;
 
 	VKA(context->graphicsQueue.queue.presentKHR(presentInfo));
 
