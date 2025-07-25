@@ -29,19 +29,28 @@ vk::Fence fences[FRAMES_IN_FLIGHT];
 vk::Semaphore acquireSemaphores[FRAMES_IN_FLIGHT];
 vk::Semaphore releaseSemaphores[FRAMES_IN_FLIGHT];
 VulkanBuffer vertexBuffer;
+VulkanBuffer indexBuffer;
 
 bool windowResized = false;
 bool windowMinimized = false;
 
 float vertexData[] = {
-	0.0f, -0.5f,
+	0.5f, -0.5f,
 	1.0f, 0.0f, 0.0f,
 
 	0.5f, 0.5f,
 	0.0f, 1.0f, 0.0f,
 
 	-0.5f, 0.5f,
-	0.0f, 0.0f, 1.0f
+	0.0f, 0.0f, 1.0f,
+
+	-0.5f, -0.5f,
+	0.0f, 1.0f, 0.0f,
+};
+
+u32 indexData[] = {
+	0, 1, 2,
+	3, 0, 2
 };
 
 void recreateRenderPass() {
@@ -152,11 +161,18 @@ void initApplication(SDL_Window* window) {
 		commandBuffers[i] = commandBuffersCreated.front();
 	}
 
+	// vertex buffer
 	createBuffer(context, &vertexBuffer, sizeof(vertexData), vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eHostVisible);
 	void* data;
 	VKA(context->device.mapMemory(vertexBuffer.memory, 0, sizeof(vertexData), {}, &data));
 	memcpy(data, vertexData, sizeof(vertexData));
 	VKA(context->device.unmapMemory(vertexBuffer.memory));
+
+	// index buffer
+	createBuffer(context, &indexBuffer, sizeof(indexData), vk::BufferUsageFlagBits::eIndexBuffer, vk::MemoryPropertyFlagBits::eHostVisible);
+	VKA(context->device.mapMemory(indexBuffer.memory, 0, sizeof(indexData), {}, &data));
+	memcpy(data, indexData, sizeof(indexData));
+	VKA(context->device.unmapMemory(indexBuffer.memory));
 }
 
 void renderApplication() {
@@ -208,7 +224,8 @@ void renderApplication() {
 		commandBuffer.setViewport(0, 1, &viewport);
 		commandBuffer.setScissor(0, 1, &scissor);
 		commandBuffer.bindVertexBuffers(0, 1, &vertexBuffer.buffer, &offset);
-		commandBuffer.draw(3, 1, 0, 0);
+		commandBuffer.bindIndexBuffer(indexBuffer.buffer, 0, vk::IndexType::eUint32);
+		commandBuffer.drawIndexed(ARRAY_COUNT(indexData), 1, 0, 0, 0);
 
 		commandBuffer.endRenderPass();
 
@@ -245,6 +262,7 @@ void cleanupApplication() {
 	VKA(context->device.waitIdle());
 
 	destroyBuffer(context, &vertexBuffer);
+	destroyBuffer(context, &indexBuffer);
 
 	for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
 		VK(context->device.destroyFence(fences[i]));
