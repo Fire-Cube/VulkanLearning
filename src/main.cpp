@@ -28,9 +28,21 @@ vk::CommandBuffer commandBuffers[FRAMES_IN_FLIGHT];
 vk::Fence fences[FRAMES_IN_FLIGHT];
 vk::Semaphore acquireSemaphores[FRAMES_IN_FLIGHT];
 vk::Semaphore releaseSemaphores[FRAMES_IN_FLIGHT];
+VulkanBuffer vertexBuffer;
 
 bool windowResized = false;
 bool windowMinimized = false;
+
+float vertexData[] = {
+	0.0f, -0.5f,
+	1.0f, 0.0f, 0.0f,
+
+	0.5f, 0.5f,
+	0.0f, 1.0f, 0.0f,
+
+	-0.5f, 0.5f,
+	0.0f, 0.0f, 1.0f
+};
 
 void recreateRenderPass() {
 	if (renderPass) {
@@ -87,7 +99,23 @@ void initApplication(SDL_Window* window) {
 
 	recreateRenderPass();
 
-	pipeline = createPipeline(context, "shaders/triangle.vert.spv", "shaders/triangle.frag.spv", renderPass, swapchain.width, swapchain.height);
+	vk::VertexInputBindingDescription vertexInputBindingDescription {};
+	vertexInputBindingDescription.binding = 0;
+	vertexInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
+	vertexInputBindingDescription.stride = sizeof(float) * 5;
+
+	vk::VertexInputAttributeDescription vertexAttributeDescriptions[2];
+	vertexAttributeDescriptions[0].binding = 0;
+	vertexAttributeDescriptions[0].location = 0;
+	vertexAttributeDescriptions[0].format = vk::Format::eR32G32Sfloat;
+	vertexAttributeDescriptions[0].offset = 0;
+
+	vertexAttributeDescriptions[1].binding = 0;
+	vertexAttributeDescriptions[1].location = 1;
+	vertexAttributeDescriptions[1].format = vk::Format::eR32G32B32Sfloat;
+	vertexAttributeDescriptions[1].offset = sizeof(float) * 2;
+
+	pipeline = createPipeline(context, "shaders/color.vert.spv", "shaders/color.frag.spv", renderPass, swapchain.width, swapchain.height, vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription);
 
 	for (auto &fence : fences) {
 		vk::FenceCreateInfo fenceCreateInfo {};
@@ -123,6 +151,12 @@ void initApplication(SDL_Window* window) {
 		auto commandBuffersCreated = VKA(context->device.allocateCommandBuffers(commandBufferAllocateInfo));
 		commandBuffers[i] = commandBuffersCreated.front();
 	}
+
+	createBuffer(context, &vertexBuffer, sizeof(vertexData), vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eHostVisible);
+	void* data;
+	VKA(context->device.mapMemory(vertexBuffer.memory, 0, sizeof(vertexData), {}, &data));
+	memcpy(data, vertexData, sizeof(vertexData));
+	VKA(context->device.unmapMemory(vertexBuffer.memory));
 }
 
 void renderApplication() {
@@ -163,15 +197,17 @@ void renderApplication() {
 		renderPassBeginInfo.clearValueCount = 1;
 		renderPassBeginInfo.pClearValues = &clearValue;
 
-		commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
-
-		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.pipeline);
-
 		vk::Viewport viewport { 0.0f, 0.0f, static_cast<float>(swapchain.width), static_cast<float>(swapchain.height)};
 		vk::Rect2D scissor { {0, 0}, {swapchain.width, swapchain.height} } ;
 
+		vk::DeviceSize offset = 0;
+
+		commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
+
+		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.pipeline);
 		commandBuffer.setViewport(0, 1, &viewport);
 		commandBuffer.setScissor(0, 1, &scissor);
+		commandBuffer.bindVertexBuffers(0, 1, &vertexBuffer.buffer, &offset);
 		commandBuffer.draw(3, 1, 0, 0);
 
 		commandBuffer.endRenderPass();
@@ -207,6 +243,8 @@ void renderApplication() {
 
 void cleanupApplication() {
 	VKA(context->device.waitIdle());
+
+	destroyBuffer(context, &vertexBuffer);
 
 	for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
 		VK(context->device.destroyFence(fences[i]));

@@ -31,7 +31,7 @@ vk::ShaderModule createShaderModule(VulkanContext* context, const std::string sh
     return resultShaderModule;
 }
 
-VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename, VkRenderPass renderPass, u32 width, u32 height) {
+VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename, VkRenderPass renderPass, u32 width, u32 height, vk::VertexInputAttributeDescription* attributes, u32 numAttributes, vk::VertexInputBindingDescription* binding) {
     vk::ShaderModule vertexShaderModule { createShaderModule(context, vertexShaderFilename )};
     vk::ShaderModule fragmentShaderModule { createShaderModule(context, fragmentShaderFilename )};
 
@@ -45,6 +45,10 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
     shaderStages[1].pName = "main";
 
     vk::PipelineVertexInputStateCreateInfo vertexInputStateCreateInfo {};
+    vertexInputStateCreateInfo.vertexBindingDescriptionCount = binding ? 1 : 0;
+    vertexInputStateCreateInfo.pVertexBindingDescriptions = binding;
+    vertexInputStateCreateInfo.vertexAttributeDescriptionCount = numAttributes;
+    vertexInputStateCreateInfo.pVertexAttributeDescriptions = attributes;
 
     vk::PipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo {};
     inputAssemblyStateCreateInfo.topology = vk::PrimitiveTopology::eTriangleList;

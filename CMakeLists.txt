@@ -17,6 +17,7 @@ set(SOURCE_FILES
         src/vulkan_base/vulkan_swapchain.cpp
         src/vulkan_base/vulkan_renderpass.cpp
         src/vulkan_base/vulkan_pipeline.cpp
+        src/vulkan_base/vulkan_utils.cpp
 )
 
 # Find SDL2
@@ -45,6 +46,8 @@ include("src/shaders/CompileShaders.cmake")
 set(SHADERS
         "${CMAKE_SOURCE_DIR}/src/shaders/triangle.vert"
         "${CMAKE_SOURCE_DIR}/src/shaders/triangle.frag"
+        "${CMAKE_SOURCE_DIR}/src/shaders/color.vert"
+        "${CMAKE_SOURCE_DIR}/src/shaders/color.frag"
 )
 
 compile_shaders(shaders "${CMAKE_SOURCE_DIR}/src/shaders" "${CMAKE_BINARY_DIR}/shaders" ${SHADERS})
