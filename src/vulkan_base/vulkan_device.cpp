@@ -117,6 +117,24 @@ bool createLogicalDevice(VulkanContext* context, u32 deviceExtensionsCount, cons
 	context->graphicsQueue.familyIndex = graphicsQueueIndex;
 	context->graphicsQueue.queue = context->device.getQueue(graphicsQueueIndex, 0);
 
+	vk::PhysicalDeviceMemoryProperties deviceMemoryProperties = VK(context->physicalDevice.getMemoryProperties());
+	LOG_INFO("Num device memory heaps: " + std::to_string(deviceMemoryProperties.memoryHeapCount));
+	for (u32 i = 0; i < deviceMemoryProperties.memoryTypeCount; i++) {
+		const char* isDeviceLocal = "false";
+		if (deviceMemoryProperties.memoryHeaps[i].flags & vk::MemoryHeapFlagBits::eDeviceLocal) {
+			isDeviceLocal = "true";
+		}
+
+		if (deviceMemoryProperties.memoryHeaps[i].size == 0) {
+			continue;
+		}
+
+		LOG_INFO("Heap: " + std::to_string(i) + " | Size: " + std::to_string(deviceMemoryProperties.memoryHeaps[i].size) + " bytes | device local: " + isDeviceLocal);
+	}
+
+	LOG_INFO("Resizeable bar detected: " + std::string{ (detectResizeableBar(context) ? "true" : "false") });
+
+
 	return true;
 }
 

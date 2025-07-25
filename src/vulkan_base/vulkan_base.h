@@ -51,6 +51,7 @@ struct VulkanContext {
 struct VulkanBuffer {
 	vk::Buffer buffer {};
 	vk::DeviceMemory memory {};
+	bool resizeableBar = false;
 };
 
 // vulkan_device.cpp
@@ -70,5 +71,7 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
 void destroyPipeline(VulkanContext* context, VulkanPipeline* pipeline);
 
 // vulkan_utils.cpp
-void createBuffer(VulkanContext* context, VulkanBuffer* buffer, u64 size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlagBits memoryProperties);
+bool detectResizeableBar(VulkanContext* context);
+void createBuffer(VulkanContext* context, VulkanBuffer* buffer, u64 size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags memoryProperties);
+void uploadDataToBuffer(VulkanContext* context, VulkanBuffer* buffer, void* data, size_t size);
 void destroyBuffer(VulkanContext* context, VulkanBuffer* buffer);

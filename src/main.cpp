@@ -162,17 +162,15 @@ void initApplication(SDL_Window* window) {
 	}
 
 	// vertex buffer
-	createBuffer(context, &vertexBuffer, sizeof(vertexData), vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eHostVisible);
-	void* data;
-	VKA(context->device.mapMemory(vertexBuffer.memory, 0, sizeof(vertexData), {}, &data));
-	memcpy(data, vertexData, sizeof(vertexData));
-	VKA(context->device.unmapMemory(vertexBuffer.memory));
+	createBuffer(context, &vertexBuffer, sizeof(vertexData), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
+	uploadDataToBuffer(context, &vertexBuffer, vertexData, sizeof(vertexData));
 
 	// index buffer
-	createBuffer(context, &indexBuffer, sizeof(indexData), vk::BufferUsageFlagBits::eIndexBuffer, vk::MemoryPropertyFlagBits::eHostVisible);
-	VKA(context->device.mapMemory(indexBuffer.memory, 0, sizeof(indexData), {}, &data));
-	memcpy(data, indexData, sizeof(indexData));
-	VKA(context->device.unmapMemory(indexBuffer.memory));
+	vk::BufferUsageFlags indexBufferUsageFlag = detectResizeableBar(context) ? vk::BufferUsageFlagBits::eIndexBuffer : vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst;
+
+	createBuffer(context, &indexBuffer, sizeof(indexData), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
+	uploadDataToBuffer(context, &indexBuffer, indexData, sizeof(indexData));
+
 }
 
 void renderApplication() {
