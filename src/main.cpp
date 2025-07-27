@@ -93,14 +93,30 @@ void recreateSwapchain() {
 void initApplication(SDL_Window* window) {
 	SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
-	u32 instanceExtensionCount = 0;
-	const char *const *enabledInstanceExtensions = SDL_Vulkan_GetInstanceExtensions(&instanceExtensionCount);
-	LOG_DEBUG("Vulkan Instance Extensions: " + std::to_string(instanceExtensionCount));
-	LOG_DEBUG(utils::join(enabledInstanceExtensions, instanceExtensionCount));
+	u32 sdlExtensionCount = 0;
+	const char *const *sdlExtensions = SDL_Vulkan_GetInstanceExtensions(&sdlExtensionCount);
+
+	std::vector<const char*> enabledInstanceExtensions;
+	enabledInstanceExtensions.reserve(sdlExtensionCount + 2);
+	enabledInstanceExtensions.insert(
+			enabledInstanceExtensions.end(),
+			sdlExtensions,
+			sdlExtensions + sdlExtensionCount
+		);
+
+#ifdef DEBUG_BUILD
+	enabledInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	enabledInstanceExtensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
+#endif
+
+	u32 instanceExtensionsCount = enabledInstanceExtensions.size();
+
+	LOG_DEBUG("Vulkan Instance Extensions: " + std::to_string(instanceExtensionsCount));
+	LOG_DEBUG(utils::join(enabledInstanceExtensions.data(), instanceExtensionsCount));
 
 	const char* enableDeviceExtensions[] { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
-	initVulkan(context, instanceExtensionCount, enabledInstanceExtensions, ARRAY_COUNT(enableDeviceExtensions), enableDeviceExtensions);
+	initVulkan(context, instanceExtensionsCount, enabledInstanceExtensions.data(), ARRAY_COUNT(enableDeviceExtensions), enableDeviceExtensions);
 
 	SDL_Vulkan_CreateSurface(window, context->instance, nullptr, &surface);
 	swapchain = createSwapchain(context, surface, vk::ImageUsageFlagBits::eColorAttachment);
@@ -166,11 +182,9 @@ void initApplication(SDL_Window* window) {
 	uploadDataToBuffer(context, &vertexBuffer, vertexData, sizeof(vertexData));
 
 	// index buffer
-	vk::BufferUsageFlags indexBufferUsageFlag = detectResizeableBar(context) ? vk::BufferUsageFlagBits::eIndexBuffer : vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst;
 
 	createBuffer(context, &indexBuffer, sizeof(indexData), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
 	uploadDataToBuffer(context, &indexBuffer, indexData, sizeof(indexData));
-
 }
 
 void renderApplication() {

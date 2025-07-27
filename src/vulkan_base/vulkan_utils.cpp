@@ -22,7 +22,6 @@ bool detectResizeableBar(VulkanContext* context) {
 
     for (u32 i = 0; i < deviceMemoryProperties.memoryTypeCount; i++) {
         auto& memoryType = deviceMemoryProperties.memoryTypes[i];
-        auto& heap = deviceMemoryProperties.memoryHeaps[memoryType.heapIndex];
 
         if ((memoryType.propertyFlags & vk::MemoryPropertyFlagBits::eDeviceLocal) && (memoryType.propertyFlags & vk::MemoryPropertyFlagBits::eHostVisible)) {
             return true;

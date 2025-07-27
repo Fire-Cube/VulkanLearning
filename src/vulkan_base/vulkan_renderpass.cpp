@@ -16,11 +16,22 @@ vk::RenderPass createRenderPass(VulkanContext* context, vk::Format format) {
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &attachmentReference;
 
+    vk::SubpassDependency dependency{};
+    dependency.srcSubpass      = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass      = 0;
+    dependency.srcStageMask    = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    dependency.dstStageMask    = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    dependency.srcAccessMask   = {};
+    dependency.dstAccessMask   = vk::AccessFlagBits::eColorAttachmentWrite;
+    dependency.dependencyFlags = vk::DependencyFlagBits::eByRegion;
+
     vk::RenderPassCreateInfo renderPassCreateInfo {};
     renderPassCreateInfo.attachmentCount = 1;
     renderPassCreateInfo.pAttachments = &attachmentDescription;
     renderPassCreateInfo.subpassCount = 1;
     renderPassCreateInfo.pSubpasses = &subpass;
+    renderPassCreateInfo.dependencyCount = 1;
+    renderPassCreateInfo.pDependencies = &dependency;
     vk::RenderPass result_renderpass = VKA(context->device.createRenderPass(renderPassCreateInfo, nullptr));
 
     return result_renderpass;

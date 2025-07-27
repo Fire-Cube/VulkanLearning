@@ -53,3 +53,8 @@ set(SHADERS
 compile_shaders(shaders "${CMAKE_SOURCE_DIR}/src/shaders" "${CMAKE_BINARY_DIR}/shaders" ${SHADERS})
 
 add_dependencies(VulkanLearning shaders)
+
+target_compile_definitions(VulkanLearning PRIVATE
+        $<$<CONFIG:Debug>:DEBUG_BUILD>
+        $<$<CONFIG:Release>:RELEASE_BUILD>
+)

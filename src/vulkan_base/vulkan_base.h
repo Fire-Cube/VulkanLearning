@@ -46,6 +46,7 @@ struct VulkanContext {
 	vk::PhysicalDeviceProperties physicalDeviceProperties {};
 	vk::Device device {};
 	VulkanQueue graphicsQueue {};
+	vk::DebugUtilsMessengerEXT debugCallback {};
 };
 
 struct VulkanBuffer {

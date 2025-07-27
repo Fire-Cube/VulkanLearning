@@ -4,6 +4,34 @@
 #include "utils.h"
 #include "types.h"
 
+VkBool32 VKAPI_CALL debugReportCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT messageTypes, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
+	if (severity == static_cast<VkDebugUtilsMessageSeverityFlagBitsEXT>(vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)) {
+		LOG_ERROR(callbackData->pMessage);
+	}
+	else if (severity == static_cast<VkDebugUtilsMessageSeverityFlagBitsEXT>(vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning)) {
+		LOG_WARNING(callbackData->pMessage);
+	}
+	else {
+		assert(false);
+	}
+
+	return false;
+}
+
+VkDebugUtilsMessengerEXT registerDebugCallback(VkInstance instance) {
+	auto pfnCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance,"vkCreateDebugUtilsMessengerEXT"));
+
+	VkDebugUtilsMessengerCreateInfoEXT debugCallbackCreateInfo {};
+	debugCallbackCreateInfo.messageSeverity = static_cast<VkDebugUtilsMessageSeverityFlagsEXT>(vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning);
+	debugCallbackCreateInfo.messageType = static_cast<VkDebugUtilsMessageTypeFlagsEXT>(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+	debugCallbackCreateInfo.pfnUserCallback = debugReportCallback;
+
+	VkDebugUtilsMessengerEXT callback;
+	VKA(pfnCreateDebugUtilsMessengerEXT(instance, &debugCallbackCreateInfo, nullptr, &callback));
+
+	return callback;
+}
+
 bool initVulkanInstance(VulkanContext* context, u32 instanceExtensionsCount, const char* const* instanceExtensions) {
 	// Vk Layers
 	const auto layerProperties = VKA(vk::enumerateInstanceLayerProperties());
@@ -13,11 +41,21 @@ bool initVulkanInstance(VulkanContext* context, u32 instanceExtensionsCount, con
 		LOG_DEBUG("Description: " + std::string(layer.description));
 	}
 
-	const char* enabledLayers[] = {
-		"VK_LAYER_KHRONOS_validation"
-	};
+	std::vector<const char*> enabledLayers;
 
-	LOG_INFO("Enabled Layers: " + utils::join(enabledLayers));
+#ifdef DEBUG_BUILD
+	enabledLayers.push_back("VK_LAYER_KHRONOS_validation");
+#endif
+	if (!enabledLayers.empty()) {
+		std::span<const char*> layerSpan(
+			enabledLayers.data(),
+			enabledLayers.size()
+		);
+		LOG_INFO("Enabled Layers: " + utils::join(layerSpan));
+	}
+	else {
+		LOG_INFO("No enabled Layers");
+	}
 
 	// Vk Extensions
 	const auto instanceExtensionProperties = VKA(vk::enumerateInstanceExtensionProperties());
@@ -26,6 +64,21 @@ bool initVulkanInstance(VulkanContext* context, u32 instanceExtensionsCount, con
 		LOG_DEBUG("Extension: " + std::string(ext.extensionName));
 	}
 
+#ifdef DEBUG_BUILD
+	std::vector<vk::ValidationFeatureEnableEXT> enableValidationFeatures = {};
+
+	// enableValidationFeatures.push_back(vk::ValidationFeatureEnableEXT::eBestPractices);
+	enableValidationFeatures.push_back(vk::ValidationFeatureEnableEXT::eGpuAssisted);
+	enableValidationFeatures.push_back(vk::ValidationFeatureEnableEXT::eSynchronizationValidation);
+	enableValidationFeatures.push_back(vk::ValidationFeatureEnableEXT::eDebugPrintf);
+
+
+	vk::ValidationFeaturesEXT validationFeatures = {};
+	validationFeatures.enabledValidationFeatureCount = enableValidationFeatures.size();
+	validationFeatures.pEnabledValidationFeatures = enableValidationFeatures.data();
+
+#endif
+
 	vk::ApplicationInfo applicationInfo{};
 	applicationInfo.pApplicationName   = "VulkanLearning";
 	applicationInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -33,14 +86,21 @@ bool initVulkanInstance(VulkanContext* context, u32 instanceExtensionsCount, con
 	applicationInfo.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
 	applicationInfo.apiVersion         = VK_API_VERSION_1_4;       // Tutorial was 1.2
 
-	vk::InstanceCreateInfo createInfo{};
-	createInfo.pApplicationInfo        = &applicationInfo;
-	createInfo.enabledLayerCount       = static_cast<u32>(std::size(enabledLayers));
-	createInfo.ppEnabledLayerNames     = enabledLayers;
-	createInfo.enabledExtensionCount   = instanceExtensionsCount;
-	createInfo.ppEnabledExtensionNames = instanceExtensions;
+	vk::InstanceCreateInfo instanceCreateInfo{};
+#ifdef DEBUG_BUILD
+	instanceCreateInfo.pNext = &validationFeatures;
+#endif
+	instanceCreateInfo.pApplicationInfo        = &applicationInfo;
+	instanceCreateInfo.enabledLayerCount       = static_cast<u32>(std::size(enabledLayers));
+	instanceCreateInfo.ppEnabledLayerNames     = enabledLayers.empty() ? nullptr : enabledLayers.data();
+	instanceCreateInfo.enabledExtensionCount   = instanceExtensionsCount;
+	instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions;
 
-	context->instance = VKA(vk::createInstance(createInfo));
+	context->instance = VKA(vk::createInstance(instanceCreateInfo));
+
+#ifdef DEBUG_BUILD
+	context->debugCallback = registerDebugCallback(context->instance);
+#endif
 
 	return true;
 }
@@ -157,5 +217,12 @@ bool initVulkan(VulkanContext* context, u32 instanceExtensionsCount, const char*
 void exitVulkan(VulkanContext* context) {
 	VKA(context->device.waitIdle());
 	VKA(context->device.destroy());
+
+#ifdef DEBUG_BUILD
+	auto pfnDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(context->instance,"vkDestroyDebugUtilsMessengerEXT"));
+	pfnDestroyDebugUtilsMessengerEXT(context->instance, context->debugCallback, nullptr);
+	context->debugCallback = nullptr;
+#endif
+
 	VKA(context->instance.destroy());
 }
