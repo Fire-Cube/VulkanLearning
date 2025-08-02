@@ -31,7 +31,9 @@ vk::ShaderModule createShaderModule(VulkanContext* context, const std::string sh
     return resultShaderModule;
 }
 
-VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename, VkRenderPass renderPass, u32 width, u32 height, vk::VertexInputAttributeDescription* attributes, u32 numAttributes, vk::VertexInputBindingDescription* binding) {
+VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename,
+                                VkRenderPass renderPass, u32 width, u32 height, vk::VertexInputAttributeDescription* attributes,
+                                u32 numAttributes, vk::VertexInputBindingDescription* binding, u32 numSetLayout, vk::DescriptorSetLayout* setLayouts) {
     vk::ShaderModule vertexShaderModule { createShaderModule(context, vertexShaderFilename )};
     vk::ShaderModule fragmentShaderModule { createShaderModule(context, fragmentShaderFilename )};
 
@@ -63,15 +65,24 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
     vk::PipelineMultisampleStateCreateInfo multisampleStateCreateInfo {};
     multisampleStateCreateInfo.rasterizationSamples = vk::SampleCountFlagBits::e1;
 
-    vk::PipelineColorBlendAttachmentState colorBlendAttachmentState{};
+    vk::PipelineColorBlendAttachmentState colorBlendAttachmentState {};
     colorBlendAttachmentState.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-    colorBlendAttachmentState.blendEnable = false;
+    colorBlendAttachmentState.blendEnable = true;
+    colorBlendAttachmentState.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
+    colorBlendAttachmentState.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+    colorBlendAttachmentState.colorBlendOp = vk::BlendOp::eAdd;
+    colorBlendAttachmentState.srcAlphaBlendFactor = vk::BlendFactor::eOne;
+    colorBlendAttachmentState.dstAlphaBlendFactor = vk::BlendFactor::eZero;
+    colorBlendAttachmentState.alphaBlendOp = vk::BlendOp::eAdd;
 
     vk::PipelineColorBlendStateCreateInfo colorBlendStateCreateInfo {};
     colorBlendStateCreateInfo.attachmentCount = 1;
     colorBlendStateCreateInfo.pAttachments = &colorBlendAttachmentState;
 
     vk::PipelineLayoutCreateInfo layoutCreateInfo {};
+    layoutCreateInfo.setLayoutCount = numSetLayout;
+    layoutCreateInfo.pSetLayouts = setLayouts;
+
     vk::PipelineLayout pipelineLayout = VKA(context->device.createPipelineLayout(layoutCreateInfo));
 
     vk::DynamicState dynamicStates[] = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};

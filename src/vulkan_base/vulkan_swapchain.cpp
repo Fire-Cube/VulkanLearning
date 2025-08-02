@@ -18,7 +18,7 @@ VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, 
     auto format = availableFormats.front().format;
     auto colorSpace = availableFormats.front().colorSpace;
 
-    LOG_INFO("Selected surface format: " + vk::to_string(format) + ", colorSpace: "+ vk::to_string(colorSpace));
+    LOG_DEBUG("Selected surface format: " + vk::to_string(format) + ", colorSpace: "+ vk::to_string(colorSpace));
 
     auto surfaceCapabilities = VKA(context->physicalDevice.getSurfaceCapabilitiesKHR(surface));
     if (surfaceCapabilities.currentExtent.width == 0xFFFFFFFF) {

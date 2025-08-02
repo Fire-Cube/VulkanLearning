@@ -1,4 +1,5 @@
 #define SDL_MAIN_HANDLED
+#define STB_IMAGE_IMPLEMENTATION
 
 #include <chrono>
 #include <thread>
@@ -8,6 +9,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <SDL3/SDL_system.h>
+
+#include <stb_image.h>
 
 #include "logger.h"
 #include "utils.h"
@@ -30,22 +33,32 @@ vk::Semaphore acquireSemaphores[FRAMES_IN_FLIGHT];
 vk::Semaphore releaseSemaphores[FRAMES_IN_FLIGHT];
 VulkanBuffer vertexBuffer;
 VulkanBuffer indexBuffer;
+VulkanImage image;
+
+vk::Sampler sampler;
+vk::DescriptorPool descriptorPool;
+vk::DescriptorSet descriptorSet;
+vk::DescriptorSetLayout descriptorSetLayout;
 
 bool windowResized = false;
 bool windowMinimized = false;
 
 float vertexData[] = {
-	0.5f, -0.5f,
-	1.0f, 0.0f, 0.0f,
+	0.5f, -0.5f,       // Position
+	1.0f, 0.0f, 0.0f,  // Color
+	1.0f, 0.0f,        // Texture coordinate
 
 	0.5f, 0.5f,
 	0.0f, 1.0f, 0.0f,
+	1.0f, 1.0f,
 
 	-0.5f, 0.5f,
 	0.0f, 0.0f, 1.0f,
+	0.0f, 1.0f,
 
 	-0.5f, -0.5f,
 	0.0f, 1.0f, 0.0f,
+	0.0f, 0.0f,
 };
 
 u32 indexData[] = {
@@ -124,12 +137,71 @@ void initApplication(SDL_Window* window) {
 
 	recreateRenderPass();
 
-	vk::VertexInputBindingDescription vertexInputBindingDescription {};
-	vertexInputBindingDescription.binding = 0;
-	vertexInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
-	vertexInputBindingDescription.stride = sizeof(float) * 5;
+	vk::SamplerCreateInfo samplerCreateInfo {};
+	samplerCreateInfo.magFilter = vk::Filter::eNearest;
+	samplerCreateInfo.minFilter = vk::Filter::eNearest;
+	samplerCreateInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+	samplerCreateInfo.addressModeU = vk::SamplerAddressMode::eClampToEdge;
+	samplerCreateInfo.addressModeV = vk::SamplerAddressMode::eClampToEdge;
+	samplerCreateInfo.addressModeW = vk::SamplerAddressMode::eClampToEdge;
+	samplerCreateInfo.mipLodBias = 0.0f;
+	samplerCreateInfo.maxAnisotropy = 1.0f;
+	samplerCreateInfo.minLod = 0.0f;
+	samplerCreateInfo.maxLod = 1.0f;
 
-	vk::VertexInputAttributeDescription vertexAttributeDescriptions[2];
+	sampler = VKA(context->device.createSampler(samplerCreateInfo));
+
+	int width, height, channels;
+	uint8_t* data = stbi_load("data/images/FireCube.png", &width, &height, &channels, STBI_rgb_alpha);
+	if (!data) {
+		LOG_ERROR("Failed to load image");
+		assert(false);
+	}
+
+	createImage(context, &image, static_cast<u32>(width), static_cast<u32>(height), vk::Format::eR8G8B8A8Unorm, vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst);
+	uploadDataToImage(context, &image, data, static_cast<u32>(width * height * STBI_rgb_alpha), static_cast<u32>(width), static_cast<u32>(height), vk::ImageLayout::eShaderReadOnlyOptimal, vk::AccessFlagBits::eNone);
+	stbi_image_free(data);
+
+	vk::DescriptorPoolSize poolSizes[] = {
+		{vk::DescriptorType::eCombinedImageSampler, 1}
+	};
+
+	vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo {};
+	descriptorPoolCreateInfo.maxSets = 1;
+	descriptorPoolCreateInfo.poolSizeCount = ARRAY_COUNT(poolSizes);
+	descriptorPoolCreateInfo.pPoolSizes = poolSizes;
+
+	descriptorPool = VKA(context->device.createDescriptorPool(descriptorPoolCreateInfo));
+
+	vk::DescriptorSetLayoutBinding bindings[] = {
+		{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr},
+	};
+
+	vk::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo {};
+	descriptorSetLayoutCreateInfo.bindingCount = ARRAY_COUNT(bindings);
+	descriptorSetLayoutCreateInfo.pBindings = bindings;
+
+	descriptorSetLayout = VKA(context->device.createDescriptorSetLayout(descriptorSetLayoutCreateInfo));
+
+	vk::DescriptorSetAllocateInfo descriptorSetAllocateInfo {};
+	descriptorSetAllocateInfo.descriptorPool = descriptorPool;
+    descriptorSetAllocateInfo.descriptorSetCount = 1;
+    descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
+
+	descriptorSet = VKA(context->device.allocateDescriptorSets(descriptorSetAllocateInfo)).front();
+
+	vk::DescriptorImageInfo descriptorImageInfo = { sampler, image.imageView, vk::ImageLayout::eReadOnlyOptimal};
+
+	vk::WriteDescriptorSet descriptorWrites [1];
+	descriptorWrites[0].dstSet = descriptorSet;
+	descriptorWrites[0].dstBinding = 0;
+	descriptorWrites[0].descriptorCount = 1;
+	descriptorWrites[0].descriptorType = vk::DescriptorType::eCombinedImageSampler;
+	descriptorWrites[0].pImageInfo = &descriptorImageInfo;
+
+	VK(context->device.updateDescriptorSets(ARRAY_COUNT(descriptorWrites), descriptorWrites, 0, nullptr));
+
+	vk::VertexInputAttributeDescription vertexAttributeDescriptions[3];
 	vertexAttributeDescriptions[0].binding = 0;
 	vertexAttributeDescriptions[0].location = 0;
 	vertexAttributeDescriptions[0].format = vk::Format::eR32G32Sfloat;
@@ -140,7 +212,18 @@ void initApplication(SDL_Window* window) {
 	vertexAttributeDescriptions[1].format = vk::Format::eR32G32B32Sfloat;
 	vertexAttributeDescriptions[1].offset = sizeof(float) * 2;
 
-	pipeline = createPipeline(context, "shaders/color.vert.spv", "shaders/color.frag.spv", renderPass, swapchain.width, swapchain.height, vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription);
+	vertexAttributeDescriptions[2].binding = 0;
+	vertexAttributeDescriptions[2].location = 2;
+	vertexAttributeDescriptions[2].format = vk::Format::eR32G32Sfloat;
+	vertexAttributeDescriptions[2].offset = sizeof(float) * 5;
+
+	vk::VertexInputBindingDescription vertexInputBindingDescription {};
+	vertexInputBindingDescription.binding = 0;
+	vertexInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
+	vertexInputBindingDescription.stride = sizeof(float) * 7;
+
+	pipeline = createPipeline(context, "shaders/texture.vert.spv", "shaders/texture.frag.spv", renderPass, swapchain.width, swapchain.height,
+								vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &descriptorSetLayout);
 
 	for (auto &fence : fences) {
 		vk::FenceCreateInfo fenceCreateInfo {};
@@ -182,7 +265,6 @@ void initApplication(SDL_Window* window) {
 	uploadDataToBuffer(context, &vertexBuffer, vertexData, sizeof(vertexData));
 
 	// index buffer
-
 	createBuffer(context, &indexBuffer, sizeof(indexData), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
 	uploadDataToBuffer(context, &indexBuffer, indexData, sizeof(indexData));
 }
@@ -237,6 +319,7 @@ void renderApplication() {
 		commandBuffer.setScissor(0, 1, &scissor);
 		commandBuffer.bindVertexBuffers(0, 1, &vertexBuffer.buffer, &offset);
 		commandBuffer.bindIndexBuffer(indexBuffer.buffer, 0, vk::IndexType::eUint32);
+		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline.pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 		commandBuffer.drawIndexed(ARRAY_COUNT(indexData), 1, 0, 0, 0);
 
 		commandBuffer.endRenderPass();
@@ -275,6 +358,11 @@ void cleanupApplication() {
 
 	destroyBuffer(context, &vertexBuffer);
 	destroyBuffer(context, &indexBuffer);
+
+	destroyImage(context, &image);
+	context->device.destroySampler(sampler);
+	context->device.destroyDescriptorSetLayout(descriptorSetLayout);
+	context->device.destroyDescriptorPool(descriptorPool);
 
 	for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
 		VK(context->device.destroyFence(fences[i]));

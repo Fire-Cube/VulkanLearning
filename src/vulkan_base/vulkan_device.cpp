@@ -22,6 +22,7 @@ VkDebugUtilsMessengerEXT registerDebugCallback(VkInstance instance) {
 	auto pfnCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance,"vkCreateDebugUtilsMessengerEXT"));
 
 	VkDebugUtilsMessengerCreateInfoEXT debugCallbackCreateInfo {};
+	debugCallbackCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 	debugCallbackCreateInfo.messageSeverity = static_cast<VkDebugUtilsMessageSeverityFlagsEXT>(vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning);
 	debugCallbackCreateInfo.messageType = static_cast<VkDebugUtilsMessageTypeFlagsEXT>(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
 	debugCallbackCreateInfo.pfnUserCallback = debugReportCallback;

@@ -55,6 +55,12 @@ struct VulkanBuffer {
 	bool resizeableBar = false;
 };
 
+struct VulkanImage {
+	vk::Image image {};
+	vk::ImageView imageView {};
+	vk::DeviceMemory memory {};
+};
+
 // vulkan_device.cpp
 bool initVulkan(VulkanContext* context, u32 instanceExtensionsCount, const char* const* instanceExtensions, u32 deviceExtensionsCount, const char* const* deviceExtensions);
 void exitVulkan(VulkanContext* context);
@@ -68,7 +74,10 @@ vk::RenderPass createRenderPass(VulkanContext* context, vk::Format format);
 void destroyRenderPass(VulkanContext* context, vk::RenderPass renderPass);
 
 // vulkan_pipeline.cpp
-VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename, VkRenderPass renderPass, u32 width, u32 height, vk::VertexInputAttributeDescription* attributes, u32 numAttributes, vk::VertexInputBindingDescription* binding);
+VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename,
+								VkRenderPass renderPass, u32 width, u32 height, vk::VertexInputAttributeDescription* attributes,
+								u32 numAttributes, vk::VertexInputBindingDescription* binding, u32 numSetLayout, vk::DescriptorSetLayout* setLayouts);
+
 void destroyPipeline(VulkanContext* context, VulkanPipeline* pipeline);
 
 // vulkan_utils.cpp
@@ -76,3 +85,6 @@ bool detectResizeableBar(VulkanContext* context);
 void createBuffer(VulkanContext* context, VulkanBuffer* buffer, u64 size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags memoryProperties);
 void uploadDataToBuffer(VulkanContext* context, VulkanBuffer* buffer, void* data, size_t size);
 void destroyBuffer(VulkanContext* context, VulkanBuffer* buffer);
+void createImage(VulkanContext* context, VulkanImage* image, u32 width, u32 height, vk::Format format, vk::ImageUsageFlags usage);
+void uploadDataToImage(VulkanContext* context, VulkanImage* image, void* data, size_t size, u32 width, u32 height, vk::ImageLayout finalLayout, vk::AccessFlags dstAccessMask);
+void destroyImage(VulkanContext* context, VulkanImage* image);

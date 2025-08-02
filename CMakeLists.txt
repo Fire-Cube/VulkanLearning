@@ -40,20 +40,30 @@ target_link_libraries(VulkanLearning PUBLIC SDL3-static)
 target_include_directories(VulkanLearning PUBLIC ${Vulkan_INCLUDE_DIRS})
 target_link_libraries(VulkanLearning PUBLIC ${Vulkan_LIBRARIES})
 
+# Include stb
+target_include_directories(VulkanLearning PUBLIC libs/stb)
+
 # Shader compilation
-include("src/shaders/CompileShaders.cmake")
+include("CMake/CompileShaders.cmake")
 
 set(SHADERS
         "${CMAKE_SOURCE_DIR}/src/shaders/triangle.vert"
         "${CMAKE_SOURCE_DIR}/src/shaders/triangle.frag"
         "${CMAKE_SOURCE_DIR}/src/shaders/color.vert"
         "${CMAKE_SOURCE_DIR}/src/shaders/color.frag"
+        "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert"
+        "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag"
 )
 
 compile_shaders(shaders "${CMAKE_SOURCE_DIR}/src/shaders" "${CMAKE_BINARY_DIR}/shaders" ${SHADERS})
-
 add_dependencies(VulkanLearning shaders)
 
+include("CMake/CopyDirectory.cmake")
+
+add_copy_directory(data_dir "${CMAKE_SOURCE_DIR}/data" "${CMAKE_BINARY_DIR}/data")
+add_dependencies(VulkanLearning data_dir)
+
+# Set build specific macro
 target_compile_definitions(VulkanLearning PRIVATE
         $<$<CONFIG:Debug>:DEBUG_BUILD>
         $<$<CONFIG:Release>:RELEASE_BUILD>
