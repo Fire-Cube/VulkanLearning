@@ -12,8 +12,11 @@
 
 #include <stb_image.h>
 
+#include "cgltf.h"
 #include "logger.h"
 #include "utils.h"
+#include "model.h"
+
 #include "vulkan_base/vulkan_base.h"
 
 Logger globalLogger("VulkanLearning.log");
@@ -25,7 +28,8 @@ VkSurfaceKHR surface;
 VulkanSwapchain swapchain;
 vk::RenderPass renderPass;
 std::vector<vk::Framebuffer> framebuffers;
-VulkanPipeline pipeline;
+VulkanPipeline spritePipeline;
+VulkanPipeline modelPipeline;
 vk::CommandPool commandPools[FRAMES_IN_FLIGHT];
 vk::CommandBuffer commandBuffers[FRAMES_IN_FLIGHT];
 vk::Fence fences[FRAMES_IN_FLIGHT];
@@ -39,6 +43,8 @@ vk::Sampler sampler;
 vk::DescriptorPool descriptorPool;
 vk::DescriptorSet descriptorSet;
 vk::DescriptorSetLayout descriptorSetLayout;
+
+Model model;
 
 bool windowResized = false;
 bool windowMinimized = false;
@@ -222,9 +228,21 @@ void initApplication(SDL_Window* window) {
 	vertexInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
 	vertexInputBindingDescription.stride = sizeof(float) * 7;
 
-	pipeline = createPipeline(context, "shaders/texture.vert.spv", "shaders/texture.frag.spv", renderPass, swapchain.width, swapchain.height,
-								vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &descriptorSetLayout);
+	vk::VertexInputAttributeDescription modelAttributeDescriptions[1];
+	modelAttributeDescriptions[0].binding = 0;
+	modelAttributeDescriptions[0].location = 0;
+	modelAttributeDescriptions[0].format = vk::Format::eR32G32B32Sfloat;
+	modelAttributeDescriptions[0].offset = 0;
 
+	vk::VertexInputBindingDescription modelInputBindingDescription {};
+	modelInputBindingDescription.binding = 0;
+	modelInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
+	modelInputBindingDescription.stride = sizeof(float) * 3;
+
+	spritePipeline = createPipeline(context, "shaders/texture.vert.spv", "shaders/texture.frag.spv", renderPass, swapchain.width, swapchain.height,
+									vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &descriptorSetLayout);
+	modelPipeline = createPipeline(context, "shaders/model.vert.spv", "shaders/model.frag.spv", renderPass, swapchain.width, swapchain.height,
+									modelAttributeDescriptions, ARRAY_COUNT(modelAttributeDescriptions), &modelInputBindingDescription, 0, nullptr);
 	for (auto &fence : fences) {
 		vk::FenceCreateInfo fenceCreateInfo {};
 		fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
@@ -267,6 +285,9 @@ void initApplication(SDL_Window* window) {
 	// index buffer
 	createBuffer(context, &indexBuffer, sizeof(indexData), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
 	uploadDataToBuffer(context, &indexBuffer, indexData, sizeof(indexData));
+
+	model = createModel(context, "data/models/Model.glb", "data/models", cgltf_component_type_r_32u);
+
 }
 
 void renderApplication() {
@@ -314,13 +335,19 @@ void renderApplication() {
 
 		commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
 
-		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.pipeline);
 		commandBuffer.setViewport(0, 1, &viewport);
 		commandBuffer.setScissor(0, 1, &scissor);
-		commandBuffer.bindVertexBuffers(0, 1, &vertexBuffer.buffer, &offset);
-		commandBuffer.bindIndexBuffer(indexBuffer.buffer, 0, vk::IndexType::eUint32);
-		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline.pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-		commandBuffer.drawIndexed(ARRAY_COUNT(indexData), 1, 0, 0, 0);
+
+		// commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, spritePipeline.pipeline);
+		// commandBuffer.bindVertexBuffers(0, 1, &vertexBuffer.buffer, &offset);
+		// commandBuffer.bindIndexBuffer(indexBuffer.buffer, 0, vk::IndexType::eUint32);
+		// commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, spritePipeline.pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+		// commandBuffer.drawIndexed(ARRAY_COUNT(indexData), 1, 0, 0, 0);
+
+		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, modelPipeline.pipeline);
+		commandBuffer.bindVertexBuffers(0, 1, &model.vertexBuffer.buffer, &offset);
+		commandBuffer.bindIndexBuffer(model.indexBuffer.buffer, 0, vk::IndexType::eUint32);
+		commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
 
 		commandBuffer.endRenderPass();
 
@@ -360,6 +387,8 @@ void cleanupApplication() {
 	destroyBuffer(context, &indexBuffer);
 
 	destroyImage(context, &image);
+	destroyModel(context, &model);
+
 	context->device.destroySampler(sampler);
 	context->device.destroyDescriptorSetLayout(descriptorSetLayout);
 	context->device.destroyDescriptorPool(descriptorPool);
@@ -374,7 +403,7 @@ void cleanupApplication() {
 		VK(context->device.destroyCommandPool(commandPool));
 	}
 
-	destroyPipeline(context, &pipeline);
+	destroyPipeline(context, &spritePipeline);
 
 	for (auto& framebuffer : framebuffers) {
 		context->device.destroyFramebuffer(framebuffer);

@@ -7,8 +7,8 @@ u32 findMemoryType(VulkanContext* context, u32 typeFilter, vk::MemoryPropertyFla
         // check if required memory type is allowed
         if (typeFilter & (1 << i)) {
             // check if required properties are satisfied
-            if (deviceMemoryProperties.memoryTypes[i].propertyFlags & memoryProperties) {
-                LOG_DEBUG("Using memory heap index " + std::to_string(deviceMemoryProperties.memoryTypes[i].heapIndex));
+            if ((deviceMemoryProperties.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties) {
+                LOG_DEBUG("Using memory type index " + std::to_string(i) + " (heap " + std::to_string(deviceMemoryProperties.memoryTypes[i].heapIndex) + ")");
                 return i;
             }
         }

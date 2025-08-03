@@ -180,7 +180,7 @@ bool createLogicalDevice(VulkanContext* context, u32 deviceExtensionsCount, cons
 
 	vk::PhysicalDeviceMemoryProperties deviceMemoryProperties = VK(context->physicalDevice.getMemoryProperties());
 	LOG_INFO("Num device memory heaps: " + std::to_string(deviceMemoryProperties.memoryHeapCount));
-	for (u32 i = 0; i < deviceMemoryProperties.memoryTypeCount; i++) {
+	for (u32 i = 0; i < deviceMemoryProperties.memoryHeapCount; ++i) {
 		const char* isDeviceLocal = "false";
 		if (deviceMemoryProperties.memoryHeaps[i].flags & vk::MemoryHeapFlagBits::eDeviceLocal) {
 			isDeviceLocal = "true";

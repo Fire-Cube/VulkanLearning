@@ -18,6 +18,7 @@ set(SOURCE_FILES
         src/vulkan_base/vulkan_renderpass.cpp
         src/vulkan_base/vulkan_pipeline.cpp
         src/vulkan_base/vulkan_utils.cpp
+        src/model.cpp
 )
 
 # Find SDL2
@@ -43,6 +44,9 @@ target_link_libraries(VulkanLearning PUBLIC ${Vulkan_LIBRARIES})
 # Include stb
 target_include_directories(VulkanLearning PUBLIC libs/stb)
 
+# Include cgltf
+target_include_directories(VulkanLearning PUBLIC libs/cgltf)
+
 # Shader compilation
 include("CMake/CompileShaders.cmake")
 
@@ -53,11 +57,14 @@ set(SHADERS
         "${CMAKE_SOURCE_DIR}/src/shaders/color.frag"
         "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert"
         "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag"
+        "${CMAKE_SOURCE_DIR}/src/shaders/model.vert"
+        "${CMAKE_SOURCE_DIR}/src/shaders/model.frag"
 )
 
 compile_shaders(shaders "${CMAKE_SOURCE_DIR}/src/shaders" "${CMAKE_BINARY_DIR}/shaders" ${SHADERS})
 add_dependencies(VulkanLearning shaders)
 
+# Copy data
 include("CMake/CopyDirectory.cmake")
 
 add_copy_directory(data_dir "${CMAKE_SOURCE_DIR}/data" "${CMAKE_BINARY_DIR}/data")
