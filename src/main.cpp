@@ -228,20 +228,25 @@ void initApplication(SDL_Window* window) {
 	vertexInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
 	vertexInputBindingDescription.stride = sizeof(float) * 7;
 
-	vk::VertexInputAttributeDescription modelAttributeDescriptions[1];
+	vk::VertexInputAttributeDescription modelAttributeDescriptions[2];
 	modelAttributeDescriptions[0].binding = 0;
 	modelAttributeDescriptions[0].location = 0;
 	modelAttributeDescriptions[0].format = vk::Format::eR32G32B32Sfloat;
 	modelAttributeDescriptions[0].offset = 0;
 
+	modelAttributeDescriptions[1].binding = 0;
+	modelAttributeDescriptions[1].location = 1;
+	modelAttributeDescriptions[1].format = vk::Format::eR32G32B32Sfloat;
+	modelAttributeDescriptions[1].offset = 0;
+
 	vk::VertexInputBindingDescription modelInputBindingDescription {};
 	modelInputBindingDescription.binding = 0;
 	modelInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
-	modelInputBindingDescription.stride = sizeof(float) * 3;
+	modelInputBindingDescription.stride = sizeof(float) * 6;
 
 	spritePipeline = createPipeline(context, "shaders/texture.vert.spv", "shaders/texture.frag.spv", renderPass, swapchain.width, swapchain.height,
 									vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &descriptorSetLayout);
-	modelPipeline = createPipeline(context, "shaders/model.vert.spv", "shaders/model.frag.spv", renderPass, swapchain.width, swapchain.height,
+	modelPipeline = createPipeline(context, "shaders/model_show_normals.vert.spv", "shaders/model_show_normals.frag.spv", renderPass, swapchain.width, swapchain.height,
 									modelAttributeDescriptions, ARRAY_COUNT(modelAttributeDescriptions), &modelInputBindingDescription, 0, nullptr);
 	for (auto &fence : fences) {
 		vk::FenceCreateInfo fenceCreateInfo {};

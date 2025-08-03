@@ -59,6 +59,8 @@ set(SHADERS
         "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag"
         "${CMAKE_SOURCE_DIR}/src/shaders/model.vert"
         "${CMAKE_SOURCE_DIR}/src/shaders/model.frag"
+        "${CMAKE_SOURCE_DIR}/src/shaders/model_show_normals.vert"
+        "${CMAKE_SOURCE_DIR}/src/shaders/model_show_normals.frag"
 )
 
 compile_shaders(shaders "${CMAKE_SOURCE_DIR}/src/shaders" "${CMAKE_BINARY_DIR}/shaders" ${SHADERS})
