@@ -47,6 +47,9 @@ target_include_directories(VulkanLearning PUBLIC libs/stb)
 # Include cgltf
 target_include_directories(VulkanLearning PUBLIC libs/cgltf)
 
+# Include glm
+target_include_directories(VulkanLearning PUBLIC libs/glm)
+
 # Shader compilation
 include("CMake/CompileShaders.cmake")
 

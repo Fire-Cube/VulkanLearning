@@ -1,5 +1,6 @@
 #define SDL_MAIN_HANDLED
 #define STB_IMAGE_IMPLEMENTATION
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 #include <chrono>
 #include <thread>
@@ -11,6 +12,8 @@
 #include <SDL3/SDL_system.h>
 
 #include <stb_image.h>
+
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "cgltf.h"
 #include "logger.h"
@@ -244,10 +247,15 @@ void initApplication(SDL_Window* window) {
 	modelInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
 	modelInputBindingDescription.stride = sizeof(float) * 6;
 
+	vk::PushConstantRange pushConstant {};
+	pushConstant.offset = 0;
+	pushConstant.size = sizeof(glm::mat4);
+	pushConstant.stageFlags = vk::ShaderStageFlagBits::eVertex;
+
 	spritePipeline = createPipeline(context, "shaders/texture.vert.spv", "shaders/texture.frag.spv", renderPass, swapchain.width, swapchain.height,
-									vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &descriptorSetLayout);
+									vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &descriptorSetLayout, nullptr);
 	modelPipeline = createPipeline(context, "shaders/model_show_normals.vert.spv", "shaders/model_show_normals.frag.spv", renderPass, swapchain.width, swapchain.height,
-									modelAttributeDescriptions, ARRAY_COUNT(modelAttributeDescriptions), &modelInputBindingDescription, 0, nullptr);
+									modelAttributeDescriptions, ARRAY_COUNT(modelAttributeDescriptions), &modelInputBindingDescription, 0, nullptr, &pushConstant);
 	for (auto &fence : fences) {
 		vk::FenceCreateInfo fenceCreateInfo {};
 		fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
@@ -297,6 +305,8 @@ void initApplication(SDL_Window* window) {
 
 void renderApplication() {
 	static u32 frameIndex = 0;
+	static float time = 0.0f;
+	time += 0.1f;
 
 	vk::SurfaceCapabilitiesKHR surfaceCapabilities = VKA(context->physicalDevice.getSurfaceCapabilitiesKHR(surface));
 	if (windowMinimized || (surfaceCapabilities.currentExtent.width == 0 || surfaceCapabilities.currentExtent.height == 0)) {
@@ -338,6 +348,15 @@ void renderApplication() {
 
 		vk::DeviceSize offset = 0;
 
+		glm::mat4 tranlationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 2.1f));
+		glm::mat4 scalingMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
+		glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), -time, glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::mat4 modelMatrix = tranlationMatrix * scalingMatrix * rotationMatrix;
+
+		//glm::mat4 projectionMatrix = glm::ortho(0.0f, static_cast<float>(swapchain.width), 0.0f, static_cast<float>(swapchain.height), 0.0f, 1.0f);
+		glm::mat4 projectionMatrix = utils::getProjectionInverseZ(glm::radians(90.0f), swapchain.width, swapchain.height, 0.01f);
+		glm::mat4 modelViewProjection = projectionMatrix * modelMatrix;
+
 		commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
 
 		commandBuffer.setViewport(0, 1, &viewport);
@@ -350,6 +369,7 @@ void renderApplication() {
 		// commandBuffer.drawIndexed(ARRAY_COUNT(indexData), 1, 0, 0, 0);
 
 		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, modelPipeline.pipeline);
+		commandBuffer.pushConstants(modelPipeline.pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(modelViewProjection), &modelViewProjection);
 		commandBuffer.bindVertexBuffers(0, 1, &model.vertexBuffer.buffer, &offset);
 		commandBuffer.bindIndexBuffer(model.indexBuffer.buffer, 0, vk::IndexType::eUint32);
 		commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
@@ -409,6 +429,7 @@ void cleanupApplication() {
 	}
 
 	destroyPipeline(context, &spritePipeline);
+	destroyPipeline(context, &modelPipeline);
 
 	for (auto& framebuffer : framebuffers) {
 		context->device.destroyFramebuffer(framebuffer);

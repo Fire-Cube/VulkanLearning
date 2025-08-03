@@ -76,7 +76,8 @@ void destroyRenderPass(VulkanContext* context, vk::RenderPass renderPass);
 // vulkan_pipeline.cpp
 VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename,
 								VkRenderPass renderPass, u32 width, u32 height, vk::VertexInputAttributeDescription* attributes,
-								u32 numAttributes, vk::VertexInputBindingDescription* binding, u32 numSetLayout, vk::DescriptorSetLayout* setLayouts);
+								u32 numAttributes, vk::VertexInputBindingDescription* binding, u32 numSetLayout, vk::DescriptorSetLayout* setLayouts,
+								vk::PushConstantRange* pushConstant);
 
 void destroyPipeline(VulkanContext* context, VulkanPipeline* pipeline);
 

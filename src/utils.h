@@ -8,6 +8,8 @@
 #include <sstream>
 #include <iomanip>
 
+#include <glm/ext/matrix_transform.hpp>
+
 namespace utils {
 
     template <typename T>
@@ -56,5 +58,16 @@ namespace utils {
     }
 
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof(array[0]))
+
+    inline glm::mat4 getProjectionInverseZ(float fov, float width, float height, float zNear) {
+        float f = 1.0f / tanf(fov / 2.0f);
+        float aspect = width / height;
+        return glm::mat4(
+            f / aspect, 0.0f, 0.0f, 0.0f,
+            0.0f, -f, 0.0f, 0.0f, // -f to flip y axis
+            0.0f, 0.0f, 0.0f, 1.0f,
+            0.0f, 0.0f, zNear, 0.0f
+            );
+    }
 
 } // namespace utils

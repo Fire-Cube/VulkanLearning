@@ -1,6 +1,6 @@
 #define CGLTF_IMPLEMENTATION
 
-#include "cgltf.h"
+#include <cgltf.h>
 
 #include "model.h"
 
@@ -61,7 +61,6 @@ Model createModel(VulkanContext* context, const char* filename, const char* mode
                     fillBuffer(sizeof(float) * 3, normalData, sizeof(float) * 6, vertexData.data() + sizeof(float) * 3, numVertices, sizeof(float) * 3);
                 }
             }
-
 
             createBuffer(context, &resultModel.vertexBuffer, vertexDataSize, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
             uploadDataToBuffer(context, &resultModel.vertexBuffer, vertexData.data(), vertexDataSize);
