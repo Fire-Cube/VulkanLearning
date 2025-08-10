@@ -3,6 +3,7 @@
 #include <cgltf.h>
 
 #include "model.h"
+#include "utils.h"
 
 void fillBuffer(u32 inputStride, void* inputData, u32 outputStride, void* outputData, u32 numElements, u32 elementSize) {
     u8* output = static_cast<u8*>(outputData);
@@ -64,7 +65,7 @@ Model createModel(VulkanContext* context, const char* filename, const char* mode
 
             createBuffer(context, &resultModel.vertexBuffer, vertexDataSize, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
             uploadDataToBuffer(context, &resultModel.vertexBuffer, vertexData.data(), vertexDataSize);
-            LOG_INFO("Loaded Model: " + std::string {filename} + " | Indices Count: " + std::to_string(resultModel.numIndices) + " | Vertices Count: " + std::to_string(numVertices) + " | Buffer Size: " + std::to_string(vertexDataSize + indexDataSize));
+            LOG_INFO("Loaded Model: " + std::string {filename} + " | Indices Count: " + utils::formatNumber(resultModel.numIndices) + " | Vertices Count: " + utils::formatNumber(numVertices) + " | Buffer Size: " + utils::formatBytes(vertexDataSize + indexDataSize));
 
         }
         cgltf_free(data);

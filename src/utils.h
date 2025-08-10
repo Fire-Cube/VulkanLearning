@@ -10,6 +10,8 @@
 
 #include <glm/ext/matrix_transform.hpp>
 
+#include "types.h"
+
 namespace utils {
 
     template <typename T>
@@ -55,6 +57,32 @@ namespace utils {
         std::ostringstream oss;
         oss << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S");
         return oss.str();
+    }
+
+    inline std::string formatBytes(double bytes) {
+        const char* units[] = { "B", "KB", "MB", "GB", "TB", "PB" };
+        int unitIndex = 0;
+
+        while (bytes >= 1024.0 && unitIndex < 5) {
+            bytes /= 1024.0;
+            unitIndex++;
+        }
+
+        std::ostringstream out;
+        out << std::fixed << std::setprecision(2) << bytes << " " << units[unitIndex];
+        return out.str();
+    }
+
+    inline std::string formatNumber(u64 number) {
+        std::string numStr = std::to_string(number);
+        int insertPosition = numStr.length() - 3;
+
+        while (insertPosition > 0) {
+            numStr.insert(insertPosition, "'");
+            insertPosition -= 3;
+        }
+
+        return numStr;
     }
 
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof(array[0]))

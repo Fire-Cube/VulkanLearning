@@ -190,7 +190,7 @@ bool createLogicalDevice(VulkanContext* context, u32 deviceExtensionsCount, cons
 			continue;
 		}
 
-		LOG_INFO("Heap: " + std::to_string(i) + " | Size: " + std::to_string(deviceMemoryProperties.memoryHeaps[i].size) + " bytes | device local: " + isDeviceLocal);
+		LOG_INFO("Heap: " + std::to_string(i) + " | Size: " + utils::formatBytes(deviceMemoryProperties.memoryHeaps[i].size) + " | device local: " + isDeviceLocal);
 	}
 
 	LOG_INFO("Resizeable bar detected: " + std::string{ (detectResizeableBar(context) ? "true" : "false") });
