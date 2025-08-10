@@ -1,22 +1,32 @@
+#include "utils.h"
 #include "vulkan_base.h"
 
 vk::RenderPass createRenderPass(VulkanContext* context, vk::Format format) {
-    vk::AttachmentDescription attachmentDescription {};
-    attachmentDescription.format = format;
-    attachmentDescription.samples = vk::SampleCountFlagBits::e1;
-    attachmentDescription.loadOp = vk::AttachmentLoadOp::eClear;
-    attachmentDescription.storeOp = vk::AttachmentStoreOp::eStore;
-    attachmentDescription.initialLayout = vk::ImageLayout::eUndefined;
-    attachmentDescription.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+    vk::AttachmentDescription attachmentDescriptions [2] = {};
+    attachmentDescriptions[0].format = format;
+    attachmentDescriptions[0].samples = vk::SampleCountFlagBits::e1;
+    attachmentDescriptions[0].loadOp = vk::AttachmentLoadOp::eClear;
+    attachmentDescriptions[0].storeOp = vk::AttachmentStoreOp::eStore;
+    attachmentDescriptions[0].initialLayout = vk::ImageLayout::eUndefined;
+    attachmentDescriptions[0].finalLayout = vk::ImageLayout::ePresentSrcKHR;
 
-    vk::AttachmentReference attachmentReference { 0, vk::ImageLayout::eColorAttachmentOptimal};
+    attachmentDescriptions[1].format = vk::Format::eD32Sfloat;
+    attachmentDescriptions[1].samples = vk::SampleCountFlagBits::e1;
+    attachmentDescriptions[1].loadOp = vk::AttachmentLoadOp::eClear;
+    attachmentDescriptions[1].storeOp = vk::AttachmentStoreOp::eStore;
+    attachmentDescriptions[1].initialLayout = vk::ImageLayout::eUndefined;
+    attachmentDescriptions[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+
+    vk::AttachmentReference attachmentReference { 0, vk::ImageLayout::eColorAttachmentOptimal };
+    vk::AttachmentReference depthStencilReference = { 1, vk::ImageLayout::eDepthStencilAttachmentOptimal };
 
     vk::SubpassDescription subpass {};
     subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &attachmentReference;
+    subpass.pDepthStencilAttachment = &depthStencilReference;
 
-    vk::SubpassDependency dependency{};
+    vk::SubpassDependency dependency {};
     dependency.srcSubpass      = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass      = 0;
     dependency.srcStageMask    = vk::PipelineStageFlagBits::eColorAttachmentOutput;
@@ -26,8 +36,8 @@ vk::RenderPass createRenderPass(VulkanContext* context, vk::Format format) {
     dependency.dependencyFlags = vk::DependencyFlagBits::eByRegion;
 
     vk::RenderPassCreateInfo renderPassCreateInfo {};
-    renderPassCreateInfo.attachmentCount = 1;
-    renderPassCreateInfo.pAttachments = &attachmentDescription;
+    renderPassCreateInfo.attachmentCount = ARRAY_COUNT(attachmentDescriptions);
+    renderPassCreateInfo.pAttachments = attachmentDescriptions;
     renderPassCreateInfo.subpassCount = 1;
     renderPassCreateInfo.pSubpasses = &subpass;
     renderPassCreateInfo.dependencyCount = 1;

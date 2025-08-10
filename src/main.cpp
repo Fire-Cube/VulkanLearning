@@ -30,6 +30,7 @@ VulkanContext* context = nullptr;
 VkSurfaceKHR surface;
 VulkanSwapchain swapchain;
 vk::RenderPass renderPass;
+std::vector<VulkanImage> depthBuffers;
 std::vector<vk::Framebuffer> framebuffers;
 VulkanPipeline spritePipeline;
 VulkanPipeline modelPipeline;
@@ -81,18 +82,27 @@ void recreateRenderPass() {
 			context->device.destroyFramebuffer(framebuffer);
 		}
 		framebuffers.clear();
-
+		for (auto& depthbuffer : depthBuffers) {
+			destroyImage(context, &depthbuffer);
+		}
 		destroyRenderPass(context, renderPass);
 	}
 
 	renderPass = createRenderPass(context, swapchain.format);
 
 	framebuffers.resize(swapchain.images.size());
+	depthBuffers.resize(swapchain.images.size());
+
 	for (u32 i = 0; i < swapchain.images.size(); i++) {
+		createImage(context, &depthBuffers.data()[i], swapchain.width, swapchain.height, vk::Format::eD32Sfloat, vk::ImageUsageFlagBits::eDepthStencilAttachment);
+		vk::ImageView attachments[2] = {
+			swapchain.imageViews[i],
+			depthBuffers[i].imageView
+		};
 		vk::FramebufferCreateInfo framebufferCreateInfo {};
 		framebufferCreateInfo.renderPass = renderPass;
-		framebufferCreateInfo.attachmentCount = 1;
-		framebufferCreateInfo.pAttachments = &swapchain.imageViews[i];
+		framebufferCreateInfo.attachmentCount = 2;
+		framebufferCreateInfo.pAttachments = attachments;
 		framebufferCreateInfo.width = swapchain.width;
 		framebufferCreateInfo.height = swapchain.height;
 		framebufferCreateInfo.layers = 1;
@@ -306,7 +316,7 @@ void initApplication(SDL_Window* window) {
 void renderApplication() {
 	static u32 frameIndex = 0;
 	static float time = 0.0f;
-	time += 0.1f;
+	time += 0.005f;
 
 	vk::SurfaceCapabilitiesKHR surfaceCapabilities = VKA(context->physicalDevice.getSurfaceCapabilitiesKHR(surface));
 	if (windowMinimized || (surfaceCapabilities.currentExtent.width == 0 || surfaceCapabilities.currentExtent.height == 0)) {
@@ -334,16 +344,19 @@ void renderApplication() {
 
 		VKA(commandBuffer.begin(commandBufferBeginInfo));
 
-		vk::ClearValue clearValue = vk::ClearColorValue{1.0f, 0.0f, 1.0f, 1.0f};
+		vk::ClearValue clearValues[2] = {
+			vk::ClearColorValue{1.0f, 0.0f, 1.0f, 1.0f},
+			vk::ClearDepthStencilValue{0.0f, 0}
+		};
 
 		vk::RenderPassBeginInfo renderPassBeginInfo {};
 		renderPassBeginInfo.renderPass = renderPass;
 		renderPassBeginInfo.framebuffer = framebuffers[imageIndex];
 		renderPassBeginInfo.renderArea = vk::Rect2D( {0, 0}, {swapchain.width, swapchain.height} );
-		renderPassBeginInfo.clearValueCount = 1;
-		renderPassBeginInfo.pClearValues = &clearValue;
+		renderPassBeginInfo.clearValueCount = ARRAY_COUNT(clearValues);
+		renderPassBeginInfo.pClearValues = clearValues;
 
-		vk::Viewport viewport { 0.0f, 0.0f, static_cast<float>(swapchain.width), static_cast<float>(swapchain.height)};
+		vk::Viewport viewport { 0.0f, 0.0f, static_cast<float>(swapchain.width), static_cast<float>(swapchain.height), 0.0f, 1.0f};
 		vk::Rect2D scissor { {0, 0}, {swapchain.width, swapchain.height} } ;
 
 		vk::DeviceSize offset = 0;
@@ -434,8 +447,12 @@ void cleanupApplication() {
 	for (auto& framebuffer : framebuffers) {
 		context->device.destroyFramebuffer(framebuffer);
 	}
-
 	framebuffers.clear();
+
+	for (auto& depthbuffer : depthBuffers) {
+		destroyImage(context, &depthbuffer);
+	}
+	depthBuffers.clear();
 
 	destroyRenderPass(context, renderPass);
 	destroySwapchain(context, &swapchain);

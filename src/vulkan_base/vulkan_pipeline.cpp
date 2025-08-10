@@ -76,6 +76,13 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
     colorBlendAttachmentState.dstAlphaBlendFactor = vk::BlendFactor::eZero;
     colorBlendAttachmentState.alphaBlendOp = vk::BlendOp::eAdd;
 
+    vk::PipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo {};
+    depthStencilStateCreateInfo.depthTestEnable = true;
+    depthStencilStateCreateInfo.depthWriteEnable = true;
+    depthStencilStateCreateInfo.depthCompareOp = vk::CompareOp::eGreaterOrEqual;
+    depthStencilStateCreateInfo.minDepthBounds = 0.0f;
+    depthStencilStateCreateInfo.maxDepthBounds = 1.0f;
+
     vk::PipelineColorBlendStateCreateInfo colorBlendStateCreateInfo {};
     colorBlendStateCreateInfo.attachmentCount = 1;
     colorBlendStateCreateInfo.pAttachments = &colorBlendAttachmentState;
@@ -102,6 +109,7 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
     pipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
     pipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
     pipelineCreateInfo.pMultisampleState = &multisampleStateCreateInfo;
+    pipelineCreateInfo.pDepthStencilState = &depthStencilStateCreateInfo;
     pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
     pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
     pipelineCreateInfo.layout = pipelineLayout;
