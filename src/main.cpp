@@ -55,6 +55,17 @@ vk::DescriptorPool modelDescriptorPool;
 vk::DescriptorSet modelDescriptorSets[FRAMES_IN_FLIGHT];
 VulkanBuffer modelUniformBuffers[FRAMES_IN_FLIGHT];
 
+struct Camera {
+	glm::vec3 position;
+	glm::vec3 direction;
+	glm::vec3 up;
+	float yaw;
+	float pitch;
+	glm::mat4 viewProjection;
+	glm::mat4 view;
+	glm::mat4 projection;
+} camera;
+
 bool windowResized = false;
 bool windowMinimized = false;
 
@@ -363,6 +374,13 @@ void initApplication(SDL_Window* window) {
 
 	model = createModel(context, "data/models/Model.glb", "data/models", cgltf_component_type_r_32u);
 
+	// Init camera
+
+	camera.position = glm::vec3(0.0f);
+	camera.direction = glm::vec3(0.0f, 0.0f, 1.0f);
+	camera.up = glm::vec3(0.0f, 1.0f, 0.0f);
+	camera.yaw = 0.0f;
+	camera.pitch = 0.0f;
 }
 
 void renderApplication() {
@@ -413,14 +431,14 @@ void renderApplication() {
 
 		vk::DeviceSize offset = 0;
 
-		glm::mat4 tranlationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 2.1f));
+		glm::mat4 tranlationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 5.0f));
 		glm::mat4 scalingMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
 		glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), -time, glm::vec3(0.0f, 1.0f, 0.0f));
 		glm::mat4 modelMatrix = tranlationMatrix * scalingMatrix * rotationMatrix;
 
-		//glm::mat4 projectionMatrix = glm::ortho(0.0f, static_cast<float>(swapchain.width), 0.0f, static_cast<float>(swapchain.height), 0.0f, 1.0f);
-		glm::mat4 projectionMatrix = utils::getProjectionInverseZ(glm::radians(90.0f), swapchain.width, swapchain.height, 0.01f);
-		glm::mat4 modelViewProjection = projectionMatrix * modelMatrix;
+		// glm::mat4 projectionMatrix = glm::ortho(0.0f, static_cast<float>(swapchain.width), 0.0f, static_cast<float>(swapchain.height), 0.0f, 1.0f);
+		// glm::mat4 projectionMatrix = utils::getProjectionInverseZ(glm::radians(90.0f), swapchain.width, swapchain.height, 0.01f);
+		glm::mat4 modelViewProjection = camera.viewProjection * modelMatrix;
 
 		commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
 
@@ -475,6 +493,59 @@ void renderApplication() {
 
 }
 
+void updateApplication(SDL_Window* window, float delta) {
+	SDL_PumpEvents();
+
+	const bool* keys = SDL_GetKeyboardState(nullptr);
+	float mouseX, mouseY;
+	SDL_MouseButtonFlags  mouseButtons = SDL_GetRelativeMouseState(&mouseX, &mouseY);
+
+	if (SDL_GetWindowRelativeMouseMode(window)) {
+		float cameraSpeed = 5.0f;
+		float mouseSensitivity = 0.27f;
+
+		if (keys[SDL_SCANCODE_W]) {
+			camera.position += glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f) * camera.direction) * delta * cameraSpeed;
+		}
+		if (keys[SDL_SCANCODE_S]) {
+			camera.position -= glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f) * camera.direction) * delta * cameraSpeed;
+		}
+		if (keys[SDL_SCANCODE_A]) {
+			camera.position += glm::normalize(glm::cross(camera.direction, camera.up)) * delta * cameraSpeed;
+		}
+		if (keys[SDL_SCANCODE_D]) {
+			camera.position -= glm::normalize(glm::cross(camera.direction, camera.up)) * delta * cameraSpeed;
+		}
+		if (keys[SDL_SCANCODE_SPACE]) {
+			camera.position += glm::normalize(camera.up) * delta * cameraSpeed;
+		}
+		if (keys[SDL_SCANCODE_LSHIFT]) {
+			camera.position -= glm::normalize(camera.up) * delta * cameraSpeed;
+		}
+
+		camera.yaw += mouseX * mouseSensitivity;
+		camera.pitch -= mouseY * mouseSensitivity;
+	}
+
+	if (camera.pitch > 89.0f) {
+		camera.pitch = 89.0f;
+	}
+	if (camera.pitch < -89.0f) {
+		camera.pitch = -89.0f;
+	}
+
+	glm::vec3 front;
+
+	front.x = cos(glm::radians(camera.pitch)) * sin(glm::radians(camera.yaw));
+	front.y = sin(glm::radians(camera.pitch));
+	front.z = cos(glm::radians(camera.pitch)) * cos(glm::radians(camera.yaw));
+
+	camera.direction = glm::normalize(front);
+	camera.projection = utils::getProjectionInverseZ(glm::radians(45.0f), swapchain.width, swapchain.height, 0.01f);
+	camera.view = glm::lookAtLH(camera.position, camera.position + camera.direction, camera.up);
+	camera.viewProjection = camera.projection * camera.view;
+}
+
 void cleanupApplication() {
 	VKA(context->device.waitIdle());
 
@@ -525,7 +596,7 @@ void cleanupApplication() {
 	exitVulkan(context);
 }
 
-bool handleMessage() {
+bool handleMessage(SDL_Window* window) {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
@@ -543,6 +614,18 @@ bool handleMessage() {
 		case SDL_EVENT_WINDOW_RESTORED:
 			windowMinimized = false;
 			windowResized = true;
+			break;
+
+		case SDL_EVENT_MOUSE_BUTTON_DOWN:
+			if (event.button.button == SDL_BUTTON_LEFT) {
+				SDL_SetWindowRelativeMouseMode(window, true);
+			}
+			break;
+
+		case SDL_EVENT_KEY_DOWN:
+			if (event.key.key == SDLK_ESCAPE) {
+				SDL_SetWindowRelativeMouseMode(window, false);
+			}
 			break;
 
 		default: ;
@@ -580,8 +663,19 @@ int main() {
 	context = &ctx;
 
 	initApplication(window);
-	while (handleMessage()) {
+
+	float delta = 0.0f;
+	u64 perfCounterFrequency = SDL_GetPerformanceFrequency();
+	u64 lastCounter = SDL_GetPerformanceCounter();
+
+	while (handleMessage(window)) {
+		updateApplication(window, delta);
 		renderApplication();
+
+		u64 endCounter = SDL_GetPerformanceCounter();
+		u64 counterElapsed = endCounter - lastCounter;
+		delta = static_cast<float>(counterElapsed) / static_cast<float>(perfCounterFrequency);
+		lastCounter = endCounter;
 	}
 
 	cleanupApplication();
