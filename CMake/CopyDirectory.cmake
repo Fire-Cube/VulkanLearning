@@ -2,7 +2,7 @@ function(add_copy_directory target_name source_dir target_dir)
     file(RELATIVE_PATH rel_source "${CMAKE_SOURCE_DIR}" "${source_dir}")
     file(RELATIVE_PATH rel_target "${CMAKE_SOURCE_DIR}" "${target_dir}")
 
-    file(GLOB_RECURSE copy_sources RELATIVE "${source_dir}" "${source_dir}/*")
+    file(GLOB_RECURSE copy_sources RELATIVE "${source_dir}" CONFIGURE_DEPENDS LIST_DIRECTORIES FALSE "${source_dir}/*")
     set(outputs "")
 
     foreach (file IN LISTS copy_sources)

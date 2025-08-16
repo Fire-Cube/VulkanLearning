@@ -185,6 +185,8 @@ void initApplication(SDL_Window* window) {
 
 	recreateRenderPass();
 
+	model = createModel(context, "data/models/BoomBox.glb", "data/models", cgltf_component_type_r_16u);
+
 	vk::SamplerCreateInfo samplerCreateInfo {};
 	samplerCreateInfo.magFilter = vk::Filter::eNearest;
 	samplerCreateInfo.minFilter = vk::Filter::eNearest;
@@ -256,7 +258,8 @@ void initApplication(SDL_Window* window) {
 			createBuffer(context, &modelUniformBuffers[i], sizeof(glm::mat4), vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 		}
 		vk::DescriptorPoolSize poolSizes[] = {
-			{vk::DescriptorType::eUniformBuffer, FRAMES_IN_FLIGHT}
+			{ vk::DescriptorType::eUniformBuffer, FRAMES_IN_FLIGHT },
+			{ vk::DescriptorType::eCombinedImageSampler, FRAMES_IN_FLIGHT }
 		};
 
 		vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo {};
@@ -267,7 +270,8 @@ void initApplication(SDL_Window* window) {
 		modelDescriptorPool = VKA(context->device.createDescriptorPool(descriptorPoolCreateInfo));
 
 		vk::DescriptorSetLayoutBinding bindings[] = {
-			{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr},
+			{ 0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr },
+			{ 1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, &sampler }
 		};
 
 		vk::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo {};
@@ -284,14 +288,22 @@ void initApplication(SDL_Window* window) {
 
 			modelDescriptorSets[i] = VKA(context->device.allocateDescriptorSets(descriptorSetAllocateInfo)).front();
 
-			vk::DescriptorBufferInfo descriptorBufferInfo = { modelUniformBuffers[i].buffer, 0, sizeof(glm::mat4)};
+			vk::DescriptorBufferInfo descriptorBufferInfo = { modelUniformBuffers[i].buffer, 0, sizeof(glm::mat4) };
+			vk::DescriptorImageInfo descriptorImageInfo = { sampler, model.albedoTexture.imageView, vk::ImageLayout::eShaderReadOnlyOptimal };
 
-			vk::WriteDescriptorSet descriptorWrites [1];
+			vk::WriteDescriptorSet descriptorWrites [2];
 			descriptorWrites[0].dstSet = modelDescriptorSets[i];
 			descriptorWrites[0].dstBinding = 0;
 			descriptorWrites[0].descriptorCount = 1;
 			descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
 			descriptorWrites[0].pBufferInfo = &descriptorBufferInfo;
+
+			descriptorWrites[1].dstSet = modelDescriptorSets[i];
+			descriptorWrites[1].dstBinding = 1;
+			descriptorWrites[1].descriptorCount = 1;
+			descriptorWrites[1].descriptorType = vk::DescriptorType::eCombinedImageSampler;
+			descriptorWrites[1].pImageInfo = &descriptorImageInfo;
+
 			VK(context->device.updateDescriptorSets(ARRAY_COUNT(descriptorWrites), descriptorWrites, 0, nullptr));
 		}
 	}
@@ -317,7 +329,7 @@ void initApplication(SDL_Window* window) {
 	vertexInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
 	vertexInputBindingDescription.stride = sizeof(float) * 7;
 
-	vk::VertexInputAttributeDescription modelAttributeDescriptions[2];
+	vk::VertexInputAttributeDescription modelAttributeDescriptions[3];
 	modelAttributeDescriptions[0].binding = 0;
 	modelAttributeDescriptions[0].location = 0;
 	modelAttributeDescriptions[0].format = vk::Format::eR32G32B32Sfloat;
@@ -326,12 +338,17 @@ void initApplication(SDL_Window* window) {
 	modelAttributeDescriptions[1].binding = 0;
 	modelAttributeDescriptions[1].location = 1;
 	modelAttributeDescriptions[1].format = vk::Format::eR32G32B32Sfloat;
-	modelAttributeDescriptions[1].offset = 0;
+	modelAttributeDescriptions[1].offset = sizeof(float) * 3;
+
+	modelAttributeDescriptions[2].binding = 0;
+	modelAttributeDescriptions[2].location = 2;
+	modelAttributeDescriptions[2].format = vk::Format::eR32G32Sfloat;
+	modelAttributeDescriptions[2].offset = sizeof(float) * 6;
 
 	vk::VertexInputBindingDescription modelInputBindingDescription {};
 	modelInputBindingDescription.binding = 0;
 	modelInputBindingDescription.inputRate = vk::VertexInputRate::eVertex;
-	modelInputBindingDescription.stride = sizeof(float) * 6;
+	modelInputBindingDescription.stride = sizeof(float) * 8;
 
 	vk::PushConstantRange pushConstant {};
 	pushConstant.offset = 0;
@@ -340,7 +357,7 @@ void initApplication(SDL_Window* window) {
 
 	spritePipeline = createPipeline(context, "shaders/texture.vert.spv", "shaders/texture.frag.spv", renderPass, swapchain.width, swapchain.height,
 									vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &spriteDescriptorSetLayout, nullptr, msaaSamples);
-	modelPipeline = createPipeline(context, "shaders/model_show_normals.vert.spv", "shaders/model_show_normals.frag.spv", renderPass, swapchain.width, swapchain.height,
+	modelPipeline = createPipeline(context, "shaders/model.vert.spv", "shaders/model.frag.spv", renderPass, swapchain.width, swapchain.height,
 									modelAttributeDescriptions, ARRAY_COUNT(modelAttributeDescriptions), &modelInputBindingDescription, 1, &modelDescriptorSetLayout, nullptr, msaaSamples);
 	for (auto &fence : fences) {
 		vk::FenceCreateInfo fenceCreateInfo {};
@@ -385,8 +402,6 @@ void initApplication(SDL_Window* window) {
 	createBuffer(context, &spriteIndexBuffer, sizeof(indexData), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
 	uploadDataToBuffer(context, &spriteIndexBuffer, indexData, sizeof(indexData));
 
-	model = createModel(context, "data/models/Model.glb", "data/models", cgltf_component_type_r_32u);
-
 	// Init camera
 
 	camera.position = glm::vec3(0.0f);
@@ -428,7 +443,7 @@ void renderApplication() {
 		VKA(commandBuffer.begin(commandBufferBeginInfo));
 
 		vk::ClearValue clearValues[2] = {
-			vk::ClearColorValue{1.0f, 0.0f, 1.0f, 1.0f},
+			vk::ClearColorValue{0.0f, 0.0f, 0.0f, 1.0f},
 			vk::ClearDepthStencilValue{0.0f, 0}
 		};
 
@@ -445,7 +460,7 @@ void renderApplication() {
 		vk::DeviceSize offset = 0;
 
 		glm::mat4 tranlationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 5.0f));
-		glm::mat4 scalingMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
+		glm::mat4 scalingMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(100.0f));
 		glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), -time, glm::vec3(0.0f, 1.0f, 0.0f));
 		glm::mat4 modelMatrix = tranlationMatrix * scalingMatrix * rotationMatrix;
 
@@ -472,7 +487,7 @@ void renderApplication() {
 		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, modelPipeline.pipeline);
 		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, modelPipeline.pipelineLayout, 0, 1, &modelDescriptorSets[frameIndex], 0, nullptr);
 		commandBuffer.bindVertexBuffers(0, 1, &model.vertexBuffer.buffer, &offset);
-		commandBuffer.bindIndexBuffer(model.indexBuffer.buffer, 0, vk::IndexType::eUint32);
+		commandBuffer.bindIndexBuffer(model.indexBuffer.buffer, 0, vk::IndexType::eUint16);
 		commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
 
 		commandBuffer.endRenderPass();
