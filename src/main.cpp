@@ -26,11 +26,14 @@ Logger globalLogger("VulkanLearning.log");
 
 #define FRAMES_IN_FLIGHT 2
 
+auto msaaSamples = vk::SampleCountFlagBits::e8;
+
 VulkanContext* context = nullptr;
 VkSurfaceKHR surface;
 VulkanSwapchain swapchain;
 vk::RenderPass renderPass;
 std::vector<VulkanImage> depthBuffers;
+std::vector<VulkanImage> colorBuffers;
 std::vector<vk::Framebuffer> framebuffers;
 vk::CommandPool commandPools[FRAMES_IN_FLIGHT];
 vk::CommandBuffer commandBuffers[FRAMES_IN_FLIGHT];
@@ -102,22 +105,32 @@ void recreateRenderPass() {
 			destroyImage(context, &depthbuffer);
 		}
 		destroyRenderPass(context, renderPass);
+		for (auto& colorbuffer : colorBuffers) {
+			destroyImage(context, &colorbuffer);
+		}
 	}
+	framebuffers.clear();
+	depthBuffers.clear();
+	colorBuffers.clear();
 
-	renderPass = createRenderPass(context, swapchain.format);
+	renderPass = createRenderPass(context, swapchain.format, msaaSamples);
 
 	framebuffers.resize(swapchain.images.size());
 	depthBuffers.resize(swapchain.images.size());
+	colorBuffers.resize(swapchain.images.size());
 
 	for (u32 i = 0; i < swapchain.images.size(); i++) {
-		createImage(context, &depthBuffers.data()[i], swapchain.width, swapchain.height, vk::Format::eD32Sfloat, vk::ImageUsageFlagBits::eDepthStencilAttachment);
-		vk::ImageView attachments[2] = {
-			swapchain.imageViews[i],
-			depthBuffers[i].imageView
+		createImage(context, &depthBuffers.data()[i], swapchain.width, swapchain.height, vk::Format::eD32Sfloat, vk::ImageUsageFlagBits::eDepthStencilAttachment, msaaSamples);
+		createImage(context, &colorBuffers.data()[i], swapchain.width, swapchain.height, swapchain.format, vk::ImageUsageFlagBits::eColorAttachment, msaaSamples);
+
+		vk::ImageView attachments[3] = {
+			colorBuffers[i].imageView,
+			depthBuffers[i].imageView,
+			swapchain.imageViews[i]
 		};
 		vk::FramebufferCreateInfo framebufferCreateInfo {};
 		framebufferCreateInfo.renderPass = renderPass;
-		framebufferCreateInfo.attachmentCount = 2;
+		framebufferCreateInfo.attachmentCount = ARRAY_COUNT(attachments);
 		framebufferCreateInfo.pAttachments = attachments;
 		framebufferCreateInfo.width = swapchain.width;
 		framebufferCreateInfo.height = swapchain.height;
@@ -168,7 +181,7 @@ void initApplication(SDL_Window* window) {
 
 	SDL_Vulkan_CreateSurface(window, context->instance, nullptr, &surface);
 	swapchain = createSwapchain(context, surface, vk::ImageUsageFlagBits::eColorAttachment);
-	renderPass = createRenderPass(context, swapchain.format);
+	renderPass = createRenderPass(context, swapchain.format, msaaSamples);
 
 	recreateRenderPass();
 
@@ -326,9 +339,9 @@ void initApplication(SDL_Window* window) {
 	pushConstant.stageFlags = vk::ShaderStageFlagBits::eVertex;
 
 	spritePipeline = createPipeline(context, "shaders/texture.vert.spv", "shaders/texture.frag.spv", renderPass, swapchain.width, swapchain.height,
-									vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &spriteDescriptorSetLayout, nullptr);
+									vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &spriteDescriptorSetLayout, nullptr, msaaSamples);
 	modelPipeline = createPipeline(context, "shaders/model_show_normals.vert.spv", "shaders/model_show_normals.frag.spv", renderPass, swapchain.width, swapchain.height,
-									modelAttributeDescriptions, ARRAY_COUNT(modelAttributeDescriptions), &modelInputBindingDescription, 1, &modelDescriptorSetLayout, nullptr);
+									modelAttributeDescriptions, ARRAY_COUNT(modelAttributeDescriptions), &modelInputBindingDescription, 1, &modelDescriptorSetLayout, nullptr, msaaSamples);
 	for (auto &fence : fences) {
 		vk::FenceCreateInfo fenceCreateInfo {};
 		fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
@@ -559,12 +572,13 @@ void cleanupApplication() {
 
 	context->device.destroyDescriptorPool(spriteDescriptorPool);
 	context->device.destroyDescriptorSetLayout(spriteDescriptorSetLayout);
-	for (auto & modelUniformBuffer : modelUniformBuffers) {
-		destroyBuffer(context, &modelUniformBuffer);
-	}
 
 	context->device.destroyDescriptorPool(modelDescriptorPool);
 	context->device.destroyDescriptorSetLayout(modelDescriptorSetLayout);
+
+	for (auto & modelUniformBuffer : modelUniformBuffers) {
+		destroyBuffer(context, &modelUniformBuffer);
+	}
 
 	for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
 		VK(context->device.destroyFence(fences[i]));
@@ -588,6 +602,11 @@ void cleanupApplication() {
 		destroyImage(context, &depthbuffer);
 	}
 	depthBuffers.clear();
+
+	for (auto& colorbuffer : colorBuffers) {
+		destroyImage(context, &colorbuffer);
+	}
+	colorBuffers.clear();
 
 	destroyRenderPass(context, renderPass);
 	destroySwapchain(context, &swapchain);

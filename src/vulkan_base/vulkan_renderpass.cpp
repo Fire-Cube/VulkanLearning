@@ -1,38 +1,47 @@
 #include "utils.h"
 #include "vulkan_base.h"
 
-vk::RenderPass createRenderPass(VulkanContext* context, vk::Format format) {
-    vk::AttachmentDescription attachmentDescriptions [2] = {};
+vk::RenderPass createRenderPass(VulkanContext* context, vk::Format format, vk::SampleCountFlagBits sampleCount) {
+    vk::AttachmentDescription attachmentDescriptions [3] = {};
     attachmentDescriptions[0].format = format;
-    attachmentDescriptions[0].samples = vk::SampleCountFlagBits::e1;
+    attachmentDescriptions[0].samples = sampleCount;
     attachmentDescriptions[0].loadOp = vk::AttachmentLoadOp::eClear;
     attachmentDescriptions[0].storeOp = vk::AttachmentStoreOp::eStore;
     attachmentDescriptions[0].initialLayout = vk::ImageLayout::eUndefined;
-    attachmentDescriptions[0].finalLayout = vk::ImageLayout::ePresentSrcKHR;
+    attachmentDescriptions[0].finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
 
     attachmentDescriptions[1].format = vk::Format::eD32Sfloat;
-    attachmentDescriptions[1].samples = vk::SampleCountFlagBits::e1;
+    attachmentDescriptions[1].samples = sampleCount;
     attachmentDescriptions[1].loadOp = vk::AttachmentLoadOp::eClear;
     attachmentDescriptions[1].storeOp = vk::AttachmentStoreOp::eStore;
     attachmentDescriptions[1].initialLayout = vk::ImageLayout::eUndefined;
     attachmentDescriptions[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
+    attachmentDescriptions[2].format = format;
+    attachmentDescriptions[2].samples = vk::SampleCountFlagBits::e1;
+    attachmentDescriptions[2].loadOp = vk::AttachmentLoadOp::eDontCare;
+    attachmentDescriptions[2].storeOp = vk::AttachmentStoreOp::eStore;
+    attachmentDescriptions[2].initialLayout = vk::ImageLayout::eUndefined;
+    attachmentDescriptions[2].finalLayout = vk::ImageLayout::ePresentSrcKHR;
+
     vk::AttachmentReference attachmentReference { 0, vk::ImageLayout::eColorAttachmentOptimal };
     vk::AttachmentReference depthStencilReference = { 1, vk::ImageLayout::eDepthStencilAttachmentOptimal };
+    vk::AttachmentReference resolveTargetReference = { 2, vk::ImageLayout::eColorAttachmentOptimal };
 
     vk::SubpassDescription subpass {};
     subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &attachmentReference;
     subpass.pDepthStencilAttachment = &depthStencilReference;
+    subpass.pResolveAttachments = &resolveTargetReference;
 
     vk::SubpassDependency dependency {};
     dependency.srcSubpass      = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass      = 0;
-    dependency.srcStageMask    = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    dependency.dstStageMask    = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    dependency.srcAccessMask   = {};
-    dependency.dstAccessMask   = vk::AccessFlagBits::eColorAttachmentWrite;
+    dependency.srcStageMask    = vk::PipelineStageFlagBits::eLateFragmentTests | vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    dependency.dstStageMask    = vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    dependency.srcAccessMask   = vk::AccessFlagBits::eDepthStencilAttachmentWrite | vk::AccessFlagBits::eColorAttachmentWrite;
+    dependency.dstAccessMask   = vk::AccessFlagBits::eDepthStencilAttachmentWrite | vk::AccessFlagBits::eColorAttachmentWrite;
     dependency.dependencyFlags = vk::DependencyFlagBits::eByRegion;
 
     vk::RenderPassCreateInfo renderPassCreateInfo {};

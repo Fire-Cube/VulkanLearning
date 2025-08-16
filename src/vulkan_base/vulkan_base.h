@@ -70,14 +70,14 @@ VulkanSwapchain createSwapchain(VulkanContext* context, vk::SurfaceKHR surface, 
 void destroySwapchain(VulkanContext* context, VulkanSwapchain* swapchain);
 
 // vulkan_renderpass.cpp
-vk::RenderPass createRenderPass(VulkanContext* context, vk::Format format);
+vk::RenderPass createRenderPass(VulkanContext* context, vk::Format format, vk::SampleCountFlagBits sampleCount);
 void destroyRenderPass(VulkanContext* context, vk::RenderPass renderPass);
 
 // vulkan_pipeline.cpp
 VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename,
 								VkRenderPass renderPass, u32 width, u32 height, vk::VertexInputAttributeDescription* attributes,
 								u32 numAttributes, vk::VertexInputBindingDescription* binding, u32 numSetLayout, vk::DescriptorSetLayout* setLayouts,
-								vk::PushConstantRange* pushConstant);
+								vk::PushConstantRange* pushConstant, vk::SampleCountFlagBits sampleCount);
 
 void destroyPipeline(VulkanContext* context, VulkanPipeline* pipeline);
 
@@ -86,6 +86,6 @@ bool detectResizeableBar(VulkanContext* context);
 void createBuffer(VulkanContext* context, VulkanBuffer* buffer, u64 size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags memoryProperties);
 void uploadDataToBuffer(VulkanContext* context, VulkanBuffer* buffer, void* data, size_t size);
 void destroyBuffer(VulkanContext* context, VulkanBuffer* buffer);
-void createImage(VulkanContext* context, VulkanImage* image, u32 width, u32 height, vk::Format format, vk::ImageUsageFlags usage);
+void createImage(VulkanContext* context, VulkanImage* image, u32 width, u32 height, vk::Format format, vk::ImageUsageFlags usage, vk::SampleCountFlagBits sampleCount = vk::SampleCountFlagBits::e1);
 void uploadDataToImage(VulkanContext* context, VulkanImage* image, void* data, size_t size, u32 width, u32 height, vk::ImageLayout finalLayout, vk::AccessFlags dstAccessMask);
 void destroyImage(VulkanContext* context, VulkanImage* image);

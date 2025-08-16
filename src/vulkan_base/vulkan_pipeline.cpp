@@ -34,7 +34,7 @@ vk::ShaderModule createShaderModule(VulkanContext* context, const std::string sh
 VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename,
                                 VkRenderPass renderPass, u32 width, u32 height, vk::VertexInputAttributeDescription* attributes,
                                 u32 numAttributes, vk::VertexInputBindingDescription* binding, u32 numSetLayout, vk::DescriptorSetLayout* setLayouts,
-                                vk::PushConstantRange* pushConstant) {
+                                vk::PushConstantRange* pushConstant, vk::SampleCountFlagBits sampleCount) {
     vk::ShaderModule vertexShaderModule { createShaderModule(context, vertexShaderFilename )};
     vk::ShaderModule fragmentShaderModule { createShaderModule(context, fragmentShaderFilename )};
 
@@ -64,7 +64,7 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
     rasterizationStateCreateInfo.lineWidth = 1.0f;
 
     vk::PipelineMultisampleStateCreateInfo multisampleStateCreateInfo {};
-    multisampleStateCreateInfo.rasterizationSamples = vk::SampleCountFlagBits::e1;
+    multisampleStateCreateInfo.rasterizationSamples = sampleCount;
 
     vk::PipelineColorBlendAttachmentState colorBlendAttachmentState {};
     colorBlendAttachmentState.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;

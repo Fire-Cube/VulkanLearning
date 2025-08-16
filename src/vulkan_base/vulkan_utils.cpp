@@ -109,7 +109,7 @@ void destroyBuffer(VulkanContext* context, VulkanBuffer* buffer) {
     VK(context->device.freeMemory(buffer->memory));
 }
 
-void createImage(VulkanContext* context, VulkanImage* image, u32 width, u32 height, vk::Format format, vk::ImageUsageFlags usage) {
+void createImage(VulkanContext* context, VulkanImage* image, u32 width, u32 height, vk::Format format, vk::ImageUsageFlags usage, vk::SampleCountFlagBits sampleCount) {
     vk::ImageCreateInfo imageCreateInfo{};
     imageCreateInfo.imageType = vk::ImageType::e2D;
     imageCreateInfo.extent = vk::Extent3D{ width, height, 1 };
@@ -119,7 +119,7 @@ void createImage(VulkanContext* context, VulkanImage* image, u32 width, u32 heig
     imageCreateInfo.tiling = vk::ImageTiling::eOptimal;
     imageCreateInfo.initialLayout = vk::ImageLayout::eUndefined;
     imageCreateInfo.usage = usage;
-    imageCreateInfo.samples = vk::SampleCountFlagBits::e1;
+    imageCreateInfo.samples = sampleCount;
     imageCreateInfo.sharingMode = vk::SharingMode::eExclusive;
 
     image->image = VKA(context->device.createImage(imageCreateInfo));
