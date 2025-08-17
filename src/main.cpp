@@ -241,7 +241,7 @@ void initApplication(SDL_Window* window) {
 
 		spriteDescriptorSet = VKA(context->device.allocateDescriptorSets(descriptorSetAllocateInfo)).front();
 
-		vk::DescriptorImageInfo descriptorImageInfo = { sampler, image.imageView, vk::ImageLayout::eReadOnlyOptimal};
+		vk::DescriptorImageInfo descriptorImageInfo = { sampler, image.imageView, vk::ImageLayout::eShaderReadOnlyOptimal};
 
 		vk::WriteDescriptorSet descriptorWrites [1];
 		descriptorWrites[0].dstSet = spriteDescriptorSet;
@@ -255,7 +255,7 @@ void initApplication(SDL_Window* window) {
 
 	{
 		for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
-			createBuffer(context, &modelUniformBuffers[i], sizeof(glm::mat4), vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+			createBuffer(context, &modelUniformBuffers[i], sizeof(glm::mat4) * 2, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 		}
 		vk::DescriptorPoolSize poolSizes[] = {
 			{ vk::DescriptorType::eUniformBuffer, FRAMES_IN_FLIGHT },
@@ -288,7 +288,7 @@ void initApplication(SDL_Window* window) {
 
 			modelDescriptorSets[i] = VKA(context->device.allocateDescriptorSets(descriptorSetAllocateInfo)).front();
 
-			vk::DescriptorBufferInfo descriptorBufferInfo = { modelUniformBuffers[i].buffer, 0, sizeof(glm::mat4) };
+			vk::DescriptorBufferInfo descriptorBufferInfo = { modelUniformBuffers[i].buffer, 0, sizeof(glm::mat4) * 2 };
 			vk::DescriptorImageInfo descriptorImageInfo = { sampler, model.albedoTexture.imageView, vk::ImageLayout::eShaderReadOnlyOptimal };
 
 			vk::WriteDescriptorSet descriptorWrites [2];
@@ -443,7 +443,7 @@ void renderApplication() {
 		VKA(commandBuffer.begin(commandBufferBeginInfo));
 
 		vk::ClearValue clearValues[2] = {
-			vk::ClearColorValue{0.0f, 0.0f, 0.0f, 1.0f},
+			vk::ClearColorValue{0.5f, 0.0f, 0.5f, 1.0f},
 			vk::ClearDepthStencilValue{0.0f, 0}
 		};
 
@@ -467,6 +467,7 @@ void renderApplication() {
 		// glm::mat4 projectionMatrix = glm::ortho(0.0f, static_cast<float>(swapchain.width), 0.0f, static_cast<float>(swapchain.height), 0.0f, 1.0f);
 		// glm::mat4 projectionMatrix = utils::getProjectionInverseZ(glm::radians(90.0f), swapchain.width, swapchain.height, 0.01f);
 		glm::mat4 modelViewProjection = camera.viewProjection * modelMatrix;
+		glm::mat4 modelView = camera.view * modelMatrix;
 
 		commandBuffer.beginRenderPass(&renderPassBeginInfo, vk::SubpassContents::eInline);
 
@@ -480,8 +481,9 @@ void renderApplication() {
 		// commandBuffer.drawIndexed(ARRAY_COUNT(indexData), 1, 0, 0, 0);
 
 		void* mapped;
-		VK(context->device.mapMemory(modelUniformBuffers[frameIndex].memory, 0, sizeof(glm::mat4), {}, &mapped));
+		VK(context->device.mapMemory(modelUniformBuffers[frameIndex].memory, 0, sizeof(glm::mat4) * 2, {}, &mapped));
 		memcpy(mapped, &modelViewProjection, sizeof(modelViewProjection));
+		memcpy(static_cast<u8*>(mapped) + sizeof(glm::mat4), &modelView, sizeof(modelView));
 		VK(context->device.unmapMemory((modelUniformBuffers[frameIndex].memory)));
 
 		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, modelPipeline.pipeline);
