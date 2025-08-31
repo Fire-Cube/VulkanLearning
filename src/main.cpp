@@ -15,6 +15,10 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <imgui.h>
+#include <backends/imgui_impl_sdl3.h>
+#include <backends/imgui_impl_vulkan.h>
+
 #include "cgltf.h"
 #include "logger.h"
 #include "utils.h"
@@ -57,6 +61,8 @@ vk::DescriptorSetLayout modelDescriptorSetLayout;
 vk::DescriptorPool modelDescriptorPool;
 vk::DescriptorSet modelDescriptorSets[FRAMES_IN_FLIGHT];
 VulkanBuffer modelUniformBuffers[FRAMES_IN_FLIGHT];
+
+vk::DescriptorPool imguiDescriptorPool;
 
 struct Camera {
 	glm::vec3 position;
@@ -409,6 +415,27 @@ void initApplication(SDL_Window* window) {
 	camera.up = glm::vec3(0.0f, 1.0f, 0.0f);
 	camera.yaw = 0.0f;
 	camera.pitch = 0.0f;
+
+	ImGui::CreateContext();
+	ImGui::StyleColorsDark();
+
+	ImGui_ImplSDL3_InitForVulkan(window);
+
+	ImGui_ImplVulkan_InitInfo imguiInitInfo {};
+	imguiInitInfo.Instance = context->instance;
+	imguiInitInfo.PhysicalDevice = context->physicalDevice;
+	imguiInitInfo.Device = context->device;
+	imguiInitInfo.QueueFamily = context->graphicsQueue.familyIndex;
+	imguiInitInfo.Queue = context->graphicsQueue.queue;
+	imguiInitInfo.DescriptorPool = nullptr;
+	imguiInitInfo.DescriptorPoolSize = 1000;
+	imguiInitInfo.RenderPass = renderPass;
+	imguiInitInfo.MinImageCount = 2;
+	imguiInitInfo.ImageCount = swapchain.images.size();
+	imguiInitInfo.MSAASamples = static_cast<VkSampleCountFlagBits>(msaaSamples);
+
+	ImGui_ImplVulkan_Init(&imguiInitInfo);
+
 }
 
 void renderApplication() {
@@ -492,6 +519,11 @@ void renderApplication() {
 		commandBuffer.bindIndexBuffer(model.indexBuffer.buffer, 0, vk::IndexType::eUint16);
 		commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
 
+		// Imgui
+		ImGui::Render();
+		ImDrawData* drawData = ImGui::GetDrawData();
+		ImGui_ImplVulkan_RenderDrawData(drawData, commandBuffers[frameIndex]);
+
 		commandBuffer.endRenderPass();
 
 		VKA(commandBuffer.end());
@@ -524,11 +556,15 @@ void renderApplication() {
 }
 
 void updateApplication(SDL_Window* window, float delta) {
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplSDL3_NewFrame();
+	ImGui::NewFrame();
+
 	SDL_PumpEvents();
 
 	const bool* keys = SDL_GetKeyboardState(nullptr);
 	float mouseX, mouseY;
-	SDL_MouseButtonFlags  mouseButtons = SDL_GetRelativeMouseState(&mouseX, &mouseY);
+	SDL_GetRelativeMouseState(&mouseX, &mouseY);
 
 	if (SDL_GetWindowRelativeMouseMode(window)) {
 		float cameraSpeed = 5.0f;
@@ -574,10 +610,33 @@ void updateApplication(SDL_Window* window, float delta) {
 	camera.projection = utils::getProjectionInverseZ(glm::radians(45.0f), swapchain.width, swapchain.height, 0.01f);
 	camera.view = glm::lookAtLH(camera.position, camera.position + camera.direction, camera.up);
 	camera.viewProjection = camera.projection * camera.view;
+
+	ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration
+						   | ImGuiWindowFlags_AlwaysAutoResize
+						   | ImGuiWindowFlags_NoSavedSettings
+						   | ImGuiWindowFlags_NoFocusOnAppearing
+						   | ImGuiWindowFlags_NoNav
+						   | ImGuiWindowFlags_NoMove;
+
+	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
+	if (ImGui::Begin("##overlay", nullptr, flags)) {
+		float fps_now = (delta > 0.0f) ? (1.0f / delta) : 0.0f;
+		static float fps_smooth = fps_now;
+		fps_smooth += (fps_now - fps_smooth) * 0.1f;
+		ImGui::Text("FPS: %.1f (%.2f ms)", fps_smooth, fps_smooth > 0.f ? 1000.f / fps_smooth : 0.f);
+	}
+
+	ImGui::End();
 }
 
 void cleanupApplication() {
 	VKA(context->device.waitIdle());
+
+	// Imgui
+	ImGui_ImplVulkan_Shutdown();
+	context->device.destroyDescriptorPool(imguiDescriptorPool);
+	ImGui_ImplSDL3_Shutdown();
+	ImGui::DestroyContext();
 
 	destroyBuffer(context, &spriteVertexBuffer);
 	destroyBuffer(context, &spriteIndexBuffer);
@@ -633,38 +692,42 @@ void cleanupApplication() {
 }
 
 bool handleMessage(SDL_Window* window) {
+	ImGuiIO& io = ImGui::GetIO();
+
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
+		ImGui_ImplSDL3_ProcessEvent(&event);
+
 		switch (event.type) {
-		case SDL_EVENT_QUIT:
-			return false;
+			case SDL_EVENT_QUIT:
+				return false;
 
-		case SDL_EVENT_WINDOW_RESIZED:
-			windowResized = true;
-			break;
+			case SDL_EVENT_WINDOW_RESIZED:
+				windowResized = true;
+				break;
 
-		case SDL_EVENT_WINDOW_MINIMIZED:
-			windowMinimized = true;
-			break;
+			case SDL_EVENT_WINDOW_MINIMIZED:
+				windowMinimized = true;
+				break;
 
-		case SDL_EVENT_WINDOW_RESTORED:
-			windowMinimized = false;
-			windowResized = true;
-			break;
+			case SDL_EVENT_WINDOW_RESTORED:
+				windowMinimized = false;
+				windowResized = true;
+				break;
 
-		case SDL_EVENT_MOUSE_BUTTON_DOWN:
-			if (event.button.button == SDL_BUTTON_LEFT) {
-				SDL_SetWindowRelativeMouseMode(window, true);
-			}
-			break;
+			case SDL_EVENT_MOUSE_BUTTON_DOWN:
+				if (event.button.button == SDL_BUTTON_LEFT && !io.WantCaptureMouse) {
+					SDL_SetWindowRelativeMouseMode(window, true);
+				}
+				break;
 
-		case SDL_EVENT_KEY_DOWN:
-			if (event.key.key == SDLK_ESCAPE) {
-				SDL_SetWindowRelativeMouseMode(window, false);
-			}
-			break;
+			case SDL_EVENT_KEY_DOWN:
+				if (event.key.key == SDLK_ESCAPE) {
+					SDL_SetWindowRelativeMouseMode(window, false);
+				}
+				break;
 
-		default: ;
+			default: ;
 		}
 	}
 	return true;

@@ -21,6 +21,16 @@ set(SOURCE_FILES
         src/model.cpp
 )
 
+# Imgui source files
+set(IMGUI_SOURCE_FILES
+        libs/imgui/imgui.cpp
+        libs/imgui/imgui_draw.cpp
+        libs/imgui/imgui_widgets.cpp
+        libs/imgui/imgui_tables.cpp
+        libs/imgui/backends/imgui_impl_sdl3.cpp
+        libs/imgui/backends/imgui_impl_vulkan.cpp
+)
+
 # Find SDL2
 add_subdirectory(libs/SDL)
 
@@ -28,7 +38,7 @@ add_subdirectory(libs/SDL)
 find_package(Vulkan REQUIRED)
 
 # Add executable target with source files listed in SOURCE_FILES variable
-add_executable(VulkanLearning ${SOURCE_FILES})
+add_executable(VulkanLearning ${SOURCE_FILES} ${IMGUI_SOURCE_FILES})
 
 # Add /src to search path for headers
 target_include_directories(VulkanLearning PUBLIC ${PROJECT_SOURCE_DIR}/src)
@@ -49,6 +59,9 @@ target_include_directories(VulkanLearning PUBLIC libs/cgltf)
 
 # Include glm
 target_include_directories(VulkanLearning PUBLIC libs/glm)
+
+# Include Imgui
+target_include_directories(VulkanLearning PUBLIC libs/imgui)
 
 # Shader compilation
 include("CMake/CompileShaders.cmake")
