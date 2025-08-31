@@ -62,6 +62,10 @@ vk::DescriptorPool modelDescriptorPool;
 vk::DescriptorSet modelDescriptorSets[FRAMES_IN_FLIGHT];
 VulkanBuffer modelUniformBuffers[FRAMES_IN_FLIGHT];
 
+VulkanPipeline postprocessPipeline;
+vk::DescriptorSetLayout postprocessDescriptorSetLayout;
+vk::DescriptorSet postprocessDescriptorSets[FRAMES_IN_FLIGHT];
+
 vk::DescriptorPool imguiDescriptorPool;
 
 u64 singleElementSize = 0;
@@ -153,7 +157,7 @@ void recreateSwapchain() {
 
 	VKA(context->device.waitIdle());
 
-	swapchain = createSwapchain(context, surface, vk::ImageUsageFlagBits::eColorAttachment, &oldSwapchain);
+	swapchain = createSwapchain(context, surface, vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment, &oldSwapchain);
 
 	destroySwapchain(context, &oldSwapchain);
 	recreateRenderPass();
@@ -188,7 +192,7 @@ void initApplication(SDL_Window* window) {
 	initVulkan(context, instanceExtensionsCount, enabledInstanceExtensions.data(), ARRAY_COUNT(enableDeviceExtensions), enableDeviceExtensions);
 
 	SDL_Vulkan_CreateSurface(window, context->instance, nullptr, &surface);
-	swapchain = createSwapchain(context, surface, vk::ImageUsageFlagBits::eColorAttachment);
+	swapchain = createSwapchain(context, surface, vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment);
 	renderPass = createRenderPass(context, swapchain.format, msaaSamples);
 
 	recreateRenderPass();
@@ -270,8 +274,9 @@ void initApplication(SDL_Window* window) {
 			createBuffer(context, &modelUniformBuffers[i], singleElementSize * 2, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 		}
 		vk::DescriptorPoolSize poolSizes[] = {
-			{ vk::DescriptorType::eUniformBufferDynamic, FRAMES_IN_FLIGHT},
-			{ vk::DescriptorType::eCombinedImageSampler, FRAMES_IN_FLIGHT}
+			{ vk::DescriptorType::eUniformBufferDynamic, FRAMES_IN_FLIGHT },
+			{ vk::DescriptorType::eCombinedImageSampler, FRAMES_IN_FLIGHT },
+				{ vk::DescriptorType::eInputAttachment, FRAMES_IN_FLIGHT }
 		};
 
 		vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo {};
@@ -320,6 +325,26 @@ void initApplication(SDL_Window* window) {
 		}
 	}
 
+	{
+		vk::DescriptorSetLayoutBinding bindings[] = {
+			{ 0, vk::DescriptorType::eInputAttachment, 1, vk::ShaderStageFlagBits::eFragment, nullptr },
+		};
+
+		vk::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo {};
+		descriptorSetLayoutCreateInfo.bindingCount = ARRAY_COUNT(bindings);
+		descriptorSetLayoutCreateInfo.pBindings = bindings;
+
+		postprocessDescriptorSetLayout = VKA(context->device.createDescriptorSetLayout(descriptorSetLayoutCreateInfo));
+
+		for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
+			vk::DescriptorSetAllocateInfo descriptorSetAllocateInfo {};
+			descriptorSetAllocateInfo.descriptorPool = modelDescriptorPool;
+			descriptorSetAllocateInfo.descriptorSetCount = 1;
+			descriptorSetAllocateInfo.pSetLayouts = &postprocessDescriptorSetLayout;
+
+			postprocessDescriptorSets[i] = VKA(context->device.allocateDescriptorSets(descriptorSetAllocateInfo)).front();
+		}
+	}
 	vk::VertexInputAttributeDescription vertexAttributeDescriptions[3];
 	vertexAttributeDescriptions[0].binding = 0;
 	vertexAttributeDescriptions[0].location = 0;
@@ -368,9 +393,12 @@ void initApplication(SDL_Window* window) {
 	pushConstant.stageFlags = vk::ShaderStageFlagBits::eVertex;
 
 	spritePipeline = createPipeline(context, "shaders/texture.vert.spv", "shaders/texture.frag.spv", renderPass, swapchain.width, swapchain.height,
-									vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &spriteDescriptorSetLayout, nullptr, msaaSamples);
+									vertexAttributeDescriptions, ARRAY_COUNT(vertexAttributeDescriptions), &vertexInputBindingDescription, 1, &spriteDescriptorSetLayout, nullptr, 0, msaaSamples);
 	modelPipeline = createPipeline(context, "shaders/model.vert.spv", "shaders/model.frag.spv", renderPass, swapchain.width, swapchain.height,
-									modelAttributeDescriptions, ARRAY_COUNT(modelAttributeDescriptions), &modelInputBindingDescription, 1, &modelDescriptorSetLayout, nullptr, msaaSamples);
+									modelAttributeDescriptions, ARRAY_COUNT(modelAttributeDescriptions), &modelInputBindingDescription, 1, &modelDescriptorSetLayout, nullptr, 0, msaaSamples);
+
+	postprocessPipeline = createPipeline(context, "shaders/postprocess.vert.spv", "shaders/postprocess.frag.spv", renderPass, swapchain.width, swapchain.height,
+									nullptr, 0, nullptr, 1, &postprocessDescriptorSetLayout, nullptr, 1);
 	for (auto &fence : fences) {
 		vk::FenceCreateInfo fenceCreateInfo {};
 		fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
@@ -546,6 +574,24 @@ void renderApplication() {
 		ImDrawData* drawData = ImGui::GetDrawData();
 		ImGui_ImplVulkan_RenderDrawData(drawData, commandBuffers[frameIndex]);
 
+		// Postprocessing
+		commandBuffer.nextSubpass(vk::SubpassContents::eInline);
+
+		vk::DescriptorImageInfo descriptorImageInfo = { nullptr, swapchain.imageViews[imageIndex], vk::ImageLayout::eGeneral };
+
+		vk::WriteDescriptorSet descriptorWrite;
+		descriptorWrite.dstSet = postprocessDescriptorSets[frameIndex];
+		descriptorWrite.dstBinding = 0;
+		descriptorWrite.descriptorCount = 1;
+		descriptorWrite.descriptorType = vk::DescriptorType::eInputAttachment;
+		descriptorWrite.pImageInfo = &descriptorImageInfo;
+
+		VK(context->device.updateDescriptorSets(1, &descriptorWrite, 0, nullptr));
+
+		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, postprocessPipeline.pipeline);
+		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, postprocessPipeline.pipelineLayout, 0, 1, &postprocessDescriptorSets[frameIndex], 0, nullptr);
+		commandBuffer.draw(3, 1, 0, 0);
+
 		commandBuffer.endRenderPass();
 
 		VKA(commandBuffer.end());
@@ -674,6 +720,8 @@ void cleanupApplication() {
 	context->device.destroyDescriptorPool(modelDescriptorPool);
 	context->device.destroyDescriptorSetLayout(modelDescriptorSetLayout);
 
+	context->device.destroyDescriptorSetLayout(postprocessDescriptorSetLayout);
+
 	for (auto & modelUniformBuffer : modelUniformBuffers) {
 		destroyBuffer(context, &modelUniformBuffer);
 	}
@@ -690,6 +738,7 @@ void cleanupApplication() {
 
 	destroyPipeline(context, &spritePipeline);
 	destroyPipeline(context, &modelPipeline);
+	destroyPipeline(context, &postprocessPipeline);
 
 	for (auto& framebuffer : framebuffers) {
 		context->device.destroyFramebuffer(framebuffer);

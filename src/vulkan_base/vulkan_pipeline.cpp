@@ -34,7 +34,8 @@ vk::ShaderModule createShaderModule(VulkanContext* context, const std::string sh
 VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFilename, const char* fragmentShaderFilename,
                                 VkRenderPass renderPass, u32 width, u32 height, vk::VertexInputAttributeDescription* attributes,
                                 u32 numAttributes, vk::VertexInputBindingDescription* binding, u32 numSetLayout, vk::DescriptorSetLayout* setLayouts,
-                                vk::PushConstantRange* pushConstant, vk::SampleCountFlagBits sampleCount) {
+                                vk::PushConstantRange* pushConstant, u32 subpassIndex, vk::SampleCountFlagBits sampleCount) {
+
     vk::ShaderModule vertexShaderModule { createShaderModule(context, vertexShaderFilename )};
     vk::ShaderModule fragmentShaderModule { createShaderModule(context, fragmentShaderFilename )};
 
@@ -114,7 +115,7 @@ VulkanPipeline createPipeline(VulkanContext* context, const char* vertexShaderFi
     pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
     pipelineCreateInfo.layout = pipelineLayout;
     pipelineCreateInfo.renderPass = renderPass;
-    pipelineCreateInfo.subpass = 0;
+    pipelineCreateInfo.subpass = subpassIndex;
 
     auto result = VKA(context->device.createGraphicsPipelines(nullptr, pipelineCreateInfo));
     std::vector<vk::Pipeline> pipelines = std::move(result.value);

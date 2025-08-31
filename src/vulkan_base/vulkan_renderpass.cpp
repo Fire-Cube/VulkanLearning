@@ -27,30 +27,69 @@ vk::RenderPass createRenderPass(VulkanContext* context, vk::Format format, vk::S
     vk::AttachmentReference attachmentReference { 0, vk::ImageLayout::eColorAttachmentOptimal };
     vk::AttachmentReference depthStencilReference = { 1, vk::ImageLayout::eDepthStencilAttachmentOptimal };
     vk::AttachmentReference resolveTargetReference = { 2, vk::ImageLayout::eColorAttachmentOptimal };
+    vk::AttachmentReference postprocessTargetReference = { 2, vk::ImageLayout::eGeneral };
 
-    vk::SubpassDescription subpass {};
-    subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &attachmentReference;
-    subpass.pDepthStencilAttachment = &depthStencilReference;
-    subpass.pResolveAttachments = &resolveTargetReference;
+    vk::SubpassDescription resolveSubpassDescription {};
+    resolveSubpassDescription.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
+    resolveSubpassDescription.colorAttachmentCount = 1;
+    resolveSubpassDescription.pColorAttachments = &attachmentReference;
+    resolveSubpassDescription.pDepthStencilAttachment = &depthStencilReference;
+    resolveSubpassDescription.pResolveAttachments = &resolveTargetReference;
 
-    vk::SubpassDependency dependency {};
-    dependency.srcSubpass      = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass      = 0;
-    dependency.srcStageMask    = vk::PipelineStageFlagBits::eLateFragmentTests | vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    dependency.dstStageMask    = vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    dependency.srcAccessMask   = vk::AccessFlagBits::eDepthStencilAttachmentWrite | vk::AccessFlagBits::eColorAttachmentWrite;
-    dependency.dstAccessMask   = vk::AccessFlagBits::eDepthStencilAttachmentWrite | vk::AccessFlagBits::eColorAttachmentWrite;
-    dependency.dependencyFlags = vk::DependencyFlagBits::eByRegion;
+    vk::SubpassDescription postprocessSubpassDescription {};
+    postprocessSubpassDescription.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
+    postprocessSubpassDescription.colorAttachmentCount = 1;
+    postprocessSubpassDescription.pColorAttachments = &postprocessTargetReference;
+    postprocessSubpassDescription.inputAttachmentCount = 1;
+    postprocessSubpassDescription.pInputAttachments = &postprocessTargetReference;
+
+    vk::SubpassDescription subpasses[] = {resolveSubpassDescription, postprocessSubpassDescription};
+
+    vk::SubpassDependency readDependency{};
+    readDependency.srcSubpass      = 0;
+    readDependency.dstSubpass      = 1;
+    readDependency.srcStageMask    = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    readDependency.dstStageMask    = vk::PipelineStageFlagBits::eFragmentShader;
+    readDependency.srcAccessMask   = vk::AccessFlagBits::eColorAttachmentWrite;
+    readDependency.dstAccessMask   = vk::AccessFlagBits::eInputAttachmentRead;
+    readDependency.dependencyFlags = vk::DependencyFlagBits::eByRegion;
+
+    vk::SubpassDependency ext0Dependency{};
+    ext0Dependency.srcSubpass      = VK_SUBPASS_EXTERNAL;
+    ext0Dependency.dstSubpass      = 0;
+    ext0Dependency.srcStageMask    = vk::PipelineStageFlagBits::eBottomOfPipe;
+    ext0Dependency.dstStageMask    = vk::PipelineStageFlagBits::eEarlyFragmentTests | vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    ext0Dependency.srcAccessMask   = {};
+    ext0Dependency.dstAccessMask   = vk::AccessFlagBits::eDepthStencilAttachmentWrite | vk::AccessFlagBits::eColorAttachmentWrite;
+    ext0Dependency.dependencyFlags = vk::DependencyFlagBits::eByRegion;
+
+    vk::SubpassDependency wawDependency{};
+    wawDependency.srcSubpass       = 0;
+    wawDependency.dstSubpass       = 1;
+    wawDependency.srcStageMask     = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    wawDependency.dstStageMask     = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    wawDependency.srcAccessMask    = vk::AccessFlagBits::eColorAttachmentWrite;
+    wawDependency.dstAccessMask    = vk::AccessFlagBits::eColorAttachmentWrite;
+    wawDependency.dependencyFlags  = vk::DependencyFlagBits::eByRegion;
+
+    vk::SubpassDependency selfDependency{};
+    selfDependency.srcSubpass      = 1;
+    selfDependency.dstSubpass      = 1;
+    selfDependency.srcStageMask    = vk::PipelineStageFlagBits::eFragmentShader;
+    selfDependency.dstStageMask    = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    selfDependency.srcAccessMask   = vk::AccessFlagBits::eInputAttachmentRead;
+    selfDependency.dstAccessMask   = vk::AccessFlagBits::eColorAttachmentWrite;
+    selfDependency.dependencyFlags = vk::DependencyFlagBits::eByRegion;
+
+    vk::SubpassDependency subpassDependencies[] = { ext0Dependency, readDependency, wawDependency, selfDependency };
 
     vk::RenderPassCreateInfo renderPassCreateInfo {};
     renderPassCreateInfo.attachmentCount = ARRAY_COUNT(attachmentDescriptions);
     renderPassCreateInfo.pAttachments = attachmentDescriptions;
-    renderPassCreateInfo.subpassCount = 1;
-    renderPassCreateInfo.pSubpasses = &subpass;
-    renderPassCreateInfo.dependencyCount = 1;
-    renderPassCreateInfo.pDependencies = &dependency;
+    renderPassCreateInfo.subpassCount = ARRAY_COUNT(subpasses);
+    renderPassCreateInfo.pSubpasses = subpasses;
+    renderPassCreateInfo.dependencyCount = ARRAY_COUNT(subpassDependencies);
+    renderPassCreateInfo.pDependencies = subpassDependencies;
     vk::RenderPass result_renderpass = VKA(context->device.createRenderPass(renderPassCreateInfo, nullptr));
 
     return result_renderpass;
