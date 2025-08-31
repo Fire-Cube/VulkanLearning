@@ -7,7 +7,6 @@
 #include "logger.h"
 #include "types.h"
 
-
 #define VKA(expr)													\
 	([&]() -> decltype(auto) {										\
 		try {														\
@@ -89,3 +88,6 @@ void destroyBuffer(VulkanContext* context, VulkanBuffer* buffer);
 void createImage(VulkanContext* context, VulkanImage* image, u32 width, u32 height, vk::Format format, vk::ImageUsageFlags usage, vk::SampleCountFlagBits sampleCount = vk::SampleCountFlagBits::e1);
 void uploadDataToImage(VulkanContext* context, VulkanImage* image, void* data, size_t size, u32 width, u32 height, vk::ImageLayout finalLayout, vk::AccessFlags dstAccessMask);
 void destroyImage(VulkanContext* context, VulkanImage* image);
+
+// make this easy accessable
+#include "vulkan_debug_labels.h"

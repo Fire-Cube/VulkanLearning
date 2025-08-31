@@ -1,6 +1,7 @@
 #define SDL_MAIN_HANDLED
 #define STB_IMAGE_IMPLEMENTATION
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 
 #include <chrono>
 #include <thread>
@@ -543,54 +544,72 @@ void renderApplication() {
 		// commandBuffer.drawIndexed(ARRAY_COUNT(indexData), 1, 0, 0, 0);
 
 		void* mapped;
-		VK(context->device.mapMemory(modelUniformBuffers[frameIndex].memory, 0, singleElementSize * 2, {}, &mapped));
-		memcpy(mapped, &modelViewProjection, sizeof(modelViewProjection));
-		memcpy(static_cast<u8*>(mapped) + sizeof(glm::mat4), &modelView, sizeof(modelView));
-
-		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, modelPipeline.pipeline);
-		commandBuffer.bindVertexBuffers(0, 1, &model.vertexBuffer.buffer, &offset);
-		commandBuffer.bindIndexBuffer(model.indexBuffer.buffer, 0, vk::IndexType::eUint16);
 		u32 dynamicOffset = 0;
-		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, modelPipeline.pipelineLayout, 0, 1, &modelDescriptorSets[frameIndex], 1, &dynamicOffset);
-		commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
+
+		{
+			SCOPE_LABEL("Model1");
+
+			VK(context->device.mapMemory(modelUniformBuffers[frameIndex].memory, 0, singleElementSize * 2, {}, &mapped));
+			memcpy(mapped, &modelViewProjection, sizeof(modelViewProjection));
+			memcpy(static_cast<u8*>(mapped) + sizeof(glm::mat4), &modelView, sizeof(modelView));
+
+			commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, modelPipeline.pipeline);
+			commandBuffer.bindVertexBuffers(0, 1, &model.vertexBuffer.buffer, &offset);
+			commandBuffer.bindIndexBuffer(model.indexBuffer.buffer, 0, vk::IndexType::eUint16);
+
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, modelPipeline.pipelineLayout, 0, 1, &modelDescriptorSets[frameIndex], 1, &dynamicOffset);
+			commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
+		}
 
 		// Second instance
-		modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 10.0f)) * scalingMatrix * rotationMatrix;
-		modelViewProjection = camera.viewProjection * modelMatrix;
-		modelView = camera.view * modelMatrix;
+		{
+			SCOPE_LABEL("Model2");
 
-		mapped = static_cast<u8*>(mapped) + singleElementSize;
-		memcpy(mapped, &modelViewProjection, sizeof(modelViewProjection));
-		memcpy(static_cast<u8*>(mapped) + sizeof(glm::mat4), &modelView, sizeof(modelView));
+			modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 10.0f)) * scalingMatrix * rotationMatrix;
+			modelViewProjection = camera.viewProjection * modelMatrix;
+			modelView = camera.view * modelMatrix;
 
-		dynamicOffset = singleElementSize;
-		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, modelPipeline.pipelineLayout, 0, 1, &modelDescriptorSets[frameIndex], 1, &dynamicOffset);
-		commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
+			mapped = static_cast<u8*>(mapped) + singleElementSize;
+			memcpy(mapped, &modelViewProjection, sizeof(modelViewProjection));
+			memcpy(static_cast<u8*>(mapped) + sizeof(glm::mat4), &modelView, sizeof(modelView));
 
-		VK(context->device.unmapMemory((modelUniformBuffers[frameIndex].memory)));
+			dynamicOffset = singleElementSize;
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, modelPipeline.pipelineLayout, 0, 1, &modelDescriptorSets[frameIndex], 1, &dynamicOffset);
+			commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
 
-		// Imgui
-		ImGui::Render();
-		ImDrawData* drawData = ImGui::GetDrawData();
-		ImGui_ImplVulkan_RenderDrawData(drawData, commandBuffers[frameIndex]);
+			VK(context->device.unmapMemory((modelUniformBuffers[frameIndex].memory)));
+		}
+
+		// ImGui
+		{
+			SCOPE_LABEL("ImGui");
+
+			ImGui::Render();
+			ImDrawData* drawData = ImGui::GetDrawData();
+			ImGui_ImplVulkan_RenderDrawData(drawData, commandBuffers[frameIndex]);
+		}
 
 		// Postprocessing
-		commandBuffer.nextSubpass(vk::SubpassContents::eInline);
+		{
+			SCOPE_LABEL("Post Processing");
 
-		vk::DescriptorImageInfo descriptorImageInfo = { nullptr, swapchain.imageViews[imageIndex], vk::ImageLayout::eGeneral };
+			commandBuffer.nextSubpass(vk::SubpassContents::eInline);
 
-		vk::WriteDescriptorSet descriptorWrite;
-		descriptorWrite.dstSet = postprocessDescriptorSets[frameIndex];
-		descriptorWrite.dstBinding = 0;
-		descriptorWrite.descriptorCount = 1;
-		descriptorWrite.descriptorType = vk::DescriptorType::eInputAttachment;
-		descriptorWrite.pImageInfo = &descriptorImageInfo;
+			vk::DescriptorImageInfo descriptorImageInfo = { nullptr, swapchain.imageViews[imageIndex], vk::ImageLayout::eGeneral };
 
-		VK(context->device.updateDescriptorSets(1, &descriptorWrite, 0, nullptr));
+			vk::WriteDescriptorSet descriptorWrite;
+			descriptorWrite.dstSet = postprocessDescriptorSets[frameIndex];
+			descriptorWrite.dstBinding = 0;
+			descriptorWrite.descriptorCount = 1;
+			descriptorWrite.descriptorType = vk::DescriptorType::eInputAttachment;
+			descriptorWrite.pImageInfo = &descriptorImageInfo;
 
-		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, postprocessPipeline.pipeline);
-		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, postprocessPipeline.pipelineLayout, 0, 1, &postprocessDescriptorSets[frameIndex], 0, nullptr);
-		commandBuffer.draw(3, 1, 0, 0);
+			VK(context->device.updateDescriptorSets(1, &descriptorWrite, 0, nullptr));
+
+			commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, postprocessPipeline.pipeline);
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, postprocessPipeline.pipelineLayout, 0, 1, &postprocessDescriptorSets[frameIndex], 0, nullptr);
+			commandBuffer.draw(3, 1, 0, 0);
+		}
 
 		commandBuffer.endRenderPass();
 

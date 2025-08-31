@@ -14,6 +14,7 @@ set(SOURCE_FILES
         src/main.cpp
         src/logger.cpp
         src/vulkan_base/vulkan_device.cpp
+        src/vulkan_base/vulkan_dispatch.cpp
         src/vulkan_base/vulkan_swapchain.cpp
         src/vulkan_base/vulkan_renderpass.cpp
         src/vulkan_base/vulkan_pipeline.cpp
