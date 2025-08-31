@@ -1,14 +1,18 @@
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+#include <vulkan/vulkan.hpp>
+VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
+
 #include "vulkan_base.h"
 
 #include "logger.h"
 #include "utils.h"
 #include "types.h"
 
-VkBool32 VKAPI_CALL debugReportCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT messageTypes, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
-	if (severity == static_cast<VkDebugUtilsMessageSeverityFlagBitsEXT>(vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)) {
+VkBool32 VKAPI_CALL debugReportCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT messageTypes, const vk::DebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
+	if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError) {
 		LOG_ERROR(callbackData->pMessage);
 	}
-	else if (severity == static_cast<VkDebugUtilsMessageSeverityFlagBitsEXT>(vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning)) {
+	else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) {
 		LOG_WARNING(callbackData->pMessage);
 	}
 	else {
@@ -18,22 +22,18 @@ VkBool32 VKAPI_CALL debugReportCallback(VkDebugUtilsMessageSeverityFlagBitsEXT s
 	return false;
 }
 
-VkDebugUtilsMessengerEXT registerDebugCallback(VkInstance instance) {
-	auto pfnCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance,"vkCreateDebugUtilsMessengerEXT"));
-
-	VkDebugUtilsMessengerCreateInfoEXT debugCallbackCreateInfo {};
-	debugCallbackCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	debugCallbackCreateInfo.messageSeverity = static_cast<VkDebugUtilsMessageSeverityFlagsEXT>(vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning);
-	debugCallbackCreateInfo.messageType = static_cast<VkDebugUtilsMessageTypeFlagsEXT>(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+vk::DebugUtilsMessengerEXT registerDebugCallback(vk::Instance instance) {
+	vk::DebugUtilsMessengerCreateInfoEXT debugCallbackCreateInfo {};
+	debugCallbackCreateInfo.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
+	debugCallbackCreateInfo.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
 	debugCallbackCreateInfo.pfnUserCallback = debugReportCallback;
 
-	VkDebugUtilsMessengerEXT callback;
-	VKA(pfnCreateDebugUtilsMessengerEXT(instance, &debugCallbackCreateInfo, nullptr, &callback));
-
-	return callback;
+	return instance.createDebugUtilsMessengerEXT(debugCallbackCreateInfo);
 }
 
 bool initVulkanInstance(VulkanContext* context, u32 instanceExtensionsCount, const char* const* instanceExtensions) {
+	VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+
 	// Vk Layers
 	const auto layerProperties = VKA(vk::enumerateInstanceLayerProperties());
 	LOG_DEBUG("Active Vulkan Layers: " + std::to_string(layerProperties.size()));
@@ -98,6 +98,8 @@ bool initVulkanInstance(VulkanContext* context, u32 instanceExtensionsCount, con
 	instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions;
 
 	context->instance = VKA(vk::createInstance(instanceCreateInfo));
+
+	VULKAN_HPP_DEFAULT_DISPATCHER.init(context->instance);
 
 #ifdef DEBUG_BUILD
 	context->debugCallback = registerDebugCallback(context->instance);
@@ -175,6 +177,8 @@ bool createLogicalDevice(VulkanContext* context, u32 deviceExtensionsCount, cons
 		return false;
 	}
 
+	VULKAN_HPP_DEFAULT_DISPATCHER.init(context->device);
+
 	context->graphicsQueue.familyIndex = graphicsQueueIndex;
 	context->graphicsQueue.queue = context->device.getQueue(graphicsQueueIndex, 0);
 
@@ -220,8 +224,7 @@ void exitVulkan(VulkanContext* context) {
 	VKA(context->device.destroy());
 
 #ifdef DEBUG_BUILD
-	auto pfnDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(context->instance,"vkDestroyDebugUtilsMessengerEXT"));
-	pfnDestroyDebugUtilsMessengerEXT(context->instance, context->debugCallback, nullptr);
+	context->instance.destroyDebugUtilsMessengerEXT(context->debugCallback);
 	context->debugCallback = nullptr;
 #endif
 
