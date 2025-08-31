@@ -64,6 +64,8 @@ VulkanBuffer modelUniformBuffers[FRAMES_IN_FLIGHT];
 
 vk::DescriptorPool imguiDescriptorPool;
 
+u64 singleElementSize = 0;
+
 struct Camera {
 	glm::vec3 position;
 	glm::vec3 direction;
@@ -218,6 +220,9 @@ void initApplication(SDL_Window* window) {
 	uploadDataToImage(context, &image, data, static_cast<u32>(width * height * STBI_rgb_alpha), static_cast<u32>(width), static_cast<u32>(height), vk::ImageLayout::eShaderReadOnlyOptimal, vk::AccessFlagBits::eNone);
 	stbi_image_free(data);
 
+	u64 minUniformAlignment = context->physicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
+	singleElementSize = ALIGN_UP_POW2(sizeof(glm::mat4) * 2, minUniformAlignment);
+
 	{
 		vk::DescriptorPoolSize poolSizes[] = {
 			{vk::DescriptorType::eCombinedImageSampler, 1}
@@ -259,24 +264,25 @@ void initApplication(SDL_Window* window) {
 		VK(context->device.updateDescriptorSets(ARRAY_COUNT(descriptorWrites), descriptorWrites, 0, nullptr));
 	}
 
+	// Model
 	{
 		for (u32 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
-			createBuffer(context, &modelUniformBuffers[i], sizeof(glm::mat4) * 2, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+			createBuffer(context, &modelUniformBuffers[i], singleElementSize * 2, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 		}
 		vk::DescriptorPoolSize poolSizes[] = {
-			{ vk::DescriptorType::eUniformBuffer, FRAMES_IN_FLIGHT },
-			{ vk::DescriptorType::eCombinedImageSampler, FRAMES_IN_FLIGHT }
+			{ vk::DescriptorType::eUniformBufferDynamic, FRAMES_IN_FLIGHT},
+			{ vk::DescriptorType::eCombinedImageSampler, FRAMES_IN_FLIGHT}
 		};
 
 		vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo {};
-		descriptorPoolCreateInfo.maxSets = FRAMES_IN_FLIGHT;
+		descriptorPoolCreateInfo.maxSets = FRAMES_IN_FLIGHT * 2;
 		descriptorPoolCreateInfo.poolSizeCount = ARRAY_COUNT(poolSizes);
 		descriptorPoolCreateInfo.pPoolSizes = poolSizes;
 
 		modelDescriptorPool = VKA(context->device.createDescriptorPool(descriptorPoolCreateInfo));
 
 		vk::DescriptorSetLayoutBinding bindings[] = {
-			{ 0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr },
+			{ 0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr },
 			{ 1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, &sampler }
 		};
 
@@ -301,7 +307,7 @@ void initApplication(SDL_Window* window) {
 			descriptorWrites[0].dstSet = modelDescriptorSets[i];
 			descriptorWrites[0].dstBinding = 0;
 			descriptorWrites[0].descriptorCount = 1;
-			descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
+			descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBufferDynamic;
 			descriptorWrites[0].pBufferInfo = &descriptorBufferInfo;
 
 			descriptorWrites[1].dstSet = modelDescriptorSets[i];
@@ -450,6 +456,7 @@ void renderApplication() {
 	}
 
 	if (windowResized) {
+		ImGui::Render();
 		recreateSwapchain();
 		windowResized = false;
 	}
@@ -508,16 +515,31 @@ void renderApplication() {
 		// commandBuffer.drawIndexed(ARRAY_COUNT(indexData), 1, 0, 0, 0);
 
 		void* mapped;
-		VK(context->device.mapMemory(modelUniformBuffers[frameIndex].memory, 0, sizeof(glm::mat4) * 2, {}, &mapped));
+		VK(context->device.mapMemory(modelUniformBuffers[frameIndex].memory, 0, singleElementSize * 2, {}, &mapped));
 		memcpy(mapped, &modelViewProjection, sizeof(modelViewProjection));
 		memcpy(static_cast<u8*>(mapped) + sizeof(glm::mat4), &modelView, sizeof(modelView));
-		VK(context->device.unmapMemory((modelUniformBuffers[frameIndex].memory)));
 
 		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, modelPipeline.pipeline);
-		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, modelPipeline.pipelineLayout, 0, 1, &modelDescriptorSets[frameIndex], 0, nullptr);
 		commandBuffer.bindVertexBuffers(0, 1, &model.vertexBuffer.buffer, &offset);
 		commandBuffer.bindIndexBuffer(model.indexBuffer.buffer, 0, vk::IndexType::eUint16);
+		u32 dynamicOffset = 0;
+		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, modelPipeline.pipelineLayout, 0, 1, &modelDescriptorSets[frameIndex], 1, &dynamicOffset);
 		commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
+
+		// Second instance
+		modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 10.0f)) * scalingMatrix * rotationMatrix;
+		modelViewProjection = camera.viewProjection * modelMatrix;
+		modelView = camera.view * modelMatrix;
+
+		mapped = static_cast<u8*>(mapped) + singleElementSize;
+		memcpy(mapped, &modelViewProjection, sizeof(modelViewProjection));
+		memcpy(static_cast<u8*>(mapped) + sizeof(glm::mat4), &modelView, sizeof(modelView));
+
+		dynamicOffset = singleElementSize;
+		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, modelPipeline.pipelineLayout, 0, 1, &modelDescriptorSets[frameIndex], 1, &dynamicOffset);
+		commandBuffer.drawIndexed(model.numIndices, 1, 0, 0, 0);
+
+		VK(context->device.unmapMemory((modelUniformBuffers[frameIndex].memory)));
 
 		// Imgui
 		ImGui::Render();

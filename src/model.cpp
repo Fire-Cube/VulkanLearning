@@ -37,7 +37,7 @@ Model createModel(VulkanContext* context, const char* filename, const char* mode
             assert(data->meshes[0].primitives[0].attributes_count > 0);
 
             // Indices
-            size_t indexStride;
+            size_t indexStride = 0;
             switch (componentType) {
                 case cgltf_component_type_r_16u:
                     indexStride = sizeof(u16);

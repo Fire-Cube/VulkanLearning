@@ -85,7 +85,8 @@ namespace utils {
         return numStr;
     }
 
-#define ARRAY_COUNT(array) (sizeof(array) / sizeof(array[0]))
+    #define ARRAY_COUNT(array) (sizeof(array) / sizeof(array[0]))
+    #define ALIGN_UP_POW2(x, p) (((x) + (p) - 1) &~ ((p) - 1))
 
     inline glm::mat4 getProjectionInverseZ(float fov, float width, float height, float zNear) {
         float f = 1.0f / tanf(fov / 2.0f);
